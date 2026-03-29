@@ -1,0 +1,532 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgvector(map: "vector")]
+}
+
+model User {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  role      UserRole @default(USER)
+  action    UserAction?
+
+  name          String       @default("Adam")
+  character     String       @default("")
+  gender        Gender?
+  language      LanguageCode @default(en)
+
+  lastSignInAt   DateTime?
+  signerAddress  String  @unique
+  tokenBalance   Decimal? @default(0) @db.Decimal(19, 9)
+  tokenAllowance Decimal? @default(0) @db.Decimal(19, 9)
+  tokenSpendable Decimal? @default(0) @db.Decimal(19, 9)
+
+  ttsProviders TtsProvider[]
+  sttProviders SttProvider[]
+  aiProviders  AiProvider[]
+  dolls        Doll[]
+  avatars      Avatar[]
+  chats        Chat[]
+  messages     Message[]
+  scenarios    Scenario[]
+  tokenPermits TokenPermit[]
+  sponsorships Sponsorship[]
+  apiKeys      ApiKey[]
+
+  invitedBy   User?   @relation("UserInvites", fields: [invitedById], references: [id], onDelete: SetNull)
+  invitedById String?
+  invites     User[]  @relation("UserInvites")
+
+  @@index([invitedById])
+}
+
+enum UserAction {
+  RefreshTokenBalance
+  RefreshTokenAllowance
+  RefreshTokenBalanceAndAllowance
+  Nothing
+}
+
+model ApiKey {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  key       String   @unique @default(uuid())
+  name      String   @default("")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  @@index([userId])
+}
+
+model Doll {
+  id           String   @id @default(uuid())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  macAddress   String   @unique
+  name         String?
+  picture      String?
+  online       Boolean  @default(false)
+  rssi         Int      @default(0)
+  deepSleepCountdown Int @default(0)
+
+  dollBody   DollBody @relation(fields: [dollBodyId], references: [id])
+  dollBodyId String
+  user       User     @relation(fields: [userId], references: [id])
+  userId     String
+  chat       Chat?    @relation(fields: [chatId], references: [id])
+  chatId     String?  @unique
+}
+
+model DollBody {
+  id          String     @id @default(uuid())
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  name        String
+  description String
+  picture     String?
+  productUrl  String?
+  published   Boolean    @default(false)
+  avatar      Avatar     @relation(fields: [avatarId], references: [id])
+  avatarId    String
+  dolls       Doll[]
+  firmwares   Firmware[]
+}
+
+model Firmware {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  version   String
+  bootloader         String?
+  bootloaderChecksum String?
+  firmware           String?
+  firmwareChecksum   String?
+  partition          String?
+  partitionChecksum  String?
+  bin       String
+  checksum  String
+  dollBody   DollBody @relation(fields: [dollBodyId], references: [id])
+  dollBodyId String
+}
+
+model Avatar {
+  id        String       @id @default(uuid())
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  picture   String?
+  name      String
+  shortDesc String
+  introduction      String?
+  introductionAudio String?
+  error     String?
+  language  LanguageCode @default(en)
+  character String
+  free        Boolean      @default(false)
+  published   Boolean      @default(false)
+  recommended Boolean      @default(false)
+
+  user       User       @relation(fields: [userId], references: [id])
+  userId     String
+  gender     Gender?
+  ttsVoice   TtsVoice   @relation(fields: [ttsVoiceId], references: [id])
+  ttsVoiceId String
+  chats      Chat[]
+  dollBodies DollBody[]
+  scenarios  Scenario[]
+  fillerWords FillerWord[]
+}
+
+model FillerWord {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  text      String
+  fileName  String?
+  avatar    Avatar   @relation(fields: [avatarId], references: [id], onDelete: Cascade)
+  avatarId  String
+}
+
+model Scenario {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  type          ScenarioType @default(NORMAL)
+  name          String
+  systemMessage String
+  introduction  String?
+  greeting      String?
+  picture       String?
+  action        ScenarioAction?
+  temperature      Float?
+  topP             Float?
+  frequencyPenalty Float?
+  presencePenalty  Float?
+  dollarPerMessage Decimal    @default(0) @db.Decimal(19, 9)
+  free             Boolean    @default(false)
+  recommended      Boolean    @default(false)
+  nsfw             Boolean    @default(false)
+  published        Boolean    @default(false)
+  chatModel        ChatModel      @relation(fields: [chatModelId], references: [id])
+  chatModelId      String
+  embeddingModel   EmbeddingModel? @relation(fields: [embeddingModelId], references: [id])
+  embeddingModelId String?
+  reasoningModel   ReasoningModel? @relation(fields: [reasoningModelId], references: [id])
+  reasoningModelId String?
+  userGender       Gender?
+  avatarGender     Gender?
+  user             User           @relation(fields: [userId], references: [id])
+  userId           String
+  chats            Chat[]
+  avatars          Avatar[]
+  sponsorships     Sponsorship[]
+}
+
+enum ScenarioAction {
+  RefreshIntroduction
+  Nothing
+}
+
+model Sponsorship {
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  scenarioId  String
+  scenario    Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+model Chat {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tts                Boolean      @default(true)
+  action             ChatAction?
+  user               User                @relation(fields: [userId], references: [id])
+  userId             String
+  scenario           Scenario            @relation(fields: [scenarioId], references: [id])
+  scenarioId         String
+  avatar             Avatar              @relation(fields: [avatarId], references: [id], onDelete: Cascade)
+  avatarId           String
+  sttProvider        SttProvider?        @relation(fields: [sttProviderId], references: [id])
+  sttProviderId      String?
+  chatCompletionJobs ChatCompletionJob[]
+  messages           Message[]
+  doll               Doll?
+}
+
+enum ChatAction {
+  Init
+  RefreshSystemPrompt
+  Summarize
+  Nothing
+}
+
+model Message {
+  id        String                 @id @default(uuid())
+  createdAt DateTime               @default(now())
+  updatedAt DateTime               @updatedAt
+  role      MessageUserRole        @default(USER)
+  content   String?
+  explicit  Boolean                @default(false)
+  vector    Unsupported("vector")?
+  fileName  String?
+  completed Boolean                @default(false)
+  mood      String?
+  chat              Chat               @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  chatId            String
+  user              User               @relation(fields: [userId], references: [id])
+  userId            String
+  sttJob            SttJob?
+  ttsJob            TtsJob?
+  embeddingJob      EmbeddingJob?
+  chatCompletionJob ChatCompletionJob?
+  transactions      Transaction[]
+}
+
+model Transaction {
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  type        TransactionType
+  fromAddress       String?
+  toAddress         String?
+  amountWei         BigInt
+  txHash             String?  @unique
+  blockNumber        Int?
+  nonce              Int?
+  feeWei             BigInt?
+  feeFormatted       String?
+  timeTakenMs        Int?
+  error              String?
+  message            Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId          String
+}
+
+enum TransactionType {
+  stt
+  tts
+  chatCompletion
+  embedding
+  referralRewards
+  scenarioFee
+  platformFee
+}
+
+model ChatCompletionJob {
+  id           String   @id @default(uuid())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  inputTokens  Int?
+  outputTokens Int?
+  totalTokens  Int?
+  usdCost      Decimal  @default(0) @db.Decimal(19, 9)
+  timeTakenMs  Int?
+  error        String?
+  chatModel    ChatModel? @relation(fields: [chatModelId], references: [id], onDelete: Cascade)
+  chatModelId  String?
+  chat         Chat       @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  chatId       String
+  message      Message?   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId    String?    @unique
+}
+
+model EmbeddingJob {
+  id           String   @id @default(uuid())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  inputTokens  Int?
+  outputTokens Int?
+  totalTokens  Int?
+  usdCost      Decimal  @default(0) @db.Decimal(19, 9)
+  timeTakenMs  Int?
+  error        String?
+  message      Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId    String        @unique
+  embeddingModel   EmbeddingModel? @relation(fields: [embeddingModelId], references: [id])
+  embeddingModelId String?
+}
+
+model SttJob {
+  id           String   @id @default(uuid())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  audioSeconds Float?
+  usdCost      Decimal  @default(0) @db.Decimal(19, 9)
+  timeTakenMs  Int?
+  error        String?
+  message      Message     @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId    String      @unique
+  sttProvider  SttProvider? @relation(fields: [sttProviderId], references: [id], onDelete: Cascade)
+  sttProviderId String?
+}
+
+model TtsJob {
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  characters  Int?
+  usdCost     Decimal  @default(0) @db.Decimal(19, 9)
+  timeTakenMs Int?
+  error       String?
+  message     Message     @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId   String      @unique
+  ttsVoice    TtsVoice?   @relation(fields: [ttsVoiceId], references: [id], onDelete: Cascade)
+  ttsVoiceId  String?
+}
+
+model SttProvider {
+  id              String   @id @default(uuid())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  name            String
+  picture         String?
+  recommended     Boolean  @default(false)
+  dollarPerSecond Decimal  @default(0) @db.Decimal(19, 9)
+  free            Boolean  @default(true)
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+  chats  Chat[]
+  sttJobs SttJob[]
+}
+
+model AiProvider {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  name      String
+  apiKey    String
+  basePath  String
+  picture   String?
+  user            User             @relation(fields: [userId], references: [id])
+  userId          String
+  chatModels      ChatModel[]
+  embeddingModels EmbeddingModel[]
+  reasoningModels ReasoningModel[]
+}
+
+model ChatModel {
+  id                   String   @id @default(uuid())
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  providerModelName    String
+  info                 String?
+  dollarPerInputToken  Decimal  @default(0) @db.Decimal(19, 9)
+  dollarPerOutputToken Decimal  @default(0) @db.Decimal(19, 9)
+  contextWindow        Int      @default(0)
+  recommended          Boolean  @default(false)
+  censored             Boolean  @default(true)
+  free                 Boolean  @default(true)
+  error                String?
+  aiProvider   AiProvider @relation(fields: [aiProviderId], references: [id], onDelete: Cascade)
+  aiProviderId String
+  scenarios    Scenario[]
+  chatCompletionJobs ChatCompletionJob[]
+}
+
+model EmbeddingModel {
+  id                   String     @id @default(uuid())
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  aiProvider           AiProvider @relation(fields: [aiProviderId], references: [id], onDelete: Cascade)
+  aiProviderId         String
+  providerModelName    String
+  info                 String?
+  dollarPerInputToken  Decimal    @default(0) @db.Decimal(19, 9)
+  dollarPerOutputToken Decimal    @default(0) @db.Decimal(19, 9)
+  recommended          Boolean    @default(false)
+  error                String?
+  scenarios     Scenario[]
+  embeddingJobs EmbeddingJob[]
+}
+
+model ReasoningModel {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  providerModelName    String
+  info                 String?
+  dollarPerInputToken  Decimal    @default(0) @db.Decimal(19, 9)
+  dollarPerOutputToken Decimal    @default(0) @db.Decimal(19, 9)
+  contextWindow        Int      @default(0)
+  recommended          Boolean  @default(false)
+  censored             Boolean  @default(true)
+  error                String?
+  scenarios Scenario[]
+  aiProvider   AiProvider @relation(fields: [aiProviderId], references: [id], onDelete: Cascade)
+  aiProviderId String
+}
+
+model TtsProvider {
+  id                 String   @id @default(uuid())
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  dollarPerCharacter Decimal  @default(0) @db.Decimal(19, 9)
+  name               String
+  picture            String?
+  censored           Boolean  @default(true)
+  user      User       @relation(fields: [userId], references: [id])
+  userId    String
+  ttsVoices TtsVoice[]
+}
+
+model TtsVoice {
+  id              String   @id @default(uuid())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  name            String
+  providerVoiceId String
+  recommended     Boolean  @default(false)
+  preview         String?
+  gender          Gender?
+  language        TtsLanguage?
+  ttsProvider   TtsProvider @relation(fields: [ttsProviderId], references: [id], onDelete: Cascade)
+  ttsProviderId String
+  avatars       Avatar[]
+  ttsJobs       TtsJob[]
+}
+
+model TokenPermit {
+  id         String   @id @default(uuid())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  owner      String
+  spender    String
+  value      String
+  nonce      String
+  deadline   Int
+  v          Int
+  r          String
+  s          String
+  isUsed     Boolean  @default(false)
+  txHash     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  userId     String?
+}
+
+enum JobStatus {
+  queued
+  active
+  completed
+  failed
+}
+
+enum Gender {
+  Male
+  Female
+  Other
+}
+
+enum ProviderType {
+  STT
+  LLM
+  TTS
+}
+
+enum LanguageCode {
+  en
+  de
+  fr
+  es
+  it
+  pt
+  ru
+  ja
+  zh
+  ko
+}
+
+enum MessageUserRole {
+  SYSTEM
+  USER
+  ASSISTANT
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum ScenarioType {
+  NORMAL
+  ROLEPLAY
+}
+
+enum TtsLanguage {
+  en
+  de
+  fr
+  es
+  it
+  pt
+  ru
+  ja
+  zh
+  ko
+  multilingual
+}

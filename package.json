@@ -1,0 +1,32 @@
+{
+  "name": "cipherdolls-core",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "db:generate": "bunx prisma generate",
+    "db:push": "bunx prisma db push",
+    "db:migrate": "bunx prisma migrate deploy",
+    "test:e2e": "bun test --preload ./test/setup.ts ./test/**/*.e2e-spec.ts"
+  },
+  "dependencies": {
+    "elysia": "1.2.25",
+    "@elysiajs/bearer": "1.2.0",
+    "@elysiajs/cors": "1.2.0",
+    "@elysiajs/swagger": "1.2.0",
+    "@prisma/client": "^6.8.2",
+    "ethers": "^6.13.4",
+    "jsonwebtoken": "^9.0.2",
+    "bullmq": "^5.34.0",
+    "ioredis": "^5.6.0",
+    "aedes": "^0.51.3",
+    "mqtt": "^5.10.4",
+    "websocket-stream": "^5.5.2"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.9",
+    "bun-types": "latest",
+    "prisma": "^6.8.2",
+    "typescript": "^5.7"
+  }
+}

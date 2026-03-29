@@ -1,0 +1,146 @@
+import type { Job } from 'bullmq';
+import { Prisma, type ChatCompletionJob } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
+import { ethers } from 'ethers';
+import { BaseProcessor } from '../queue/processor';
+import { prisma } from '../db';
+import { chatCompletion } from '../llm/completion';
+import { enqueueCreated, enqueueUpdated } from '../queue/enqueue';
+
+const MASTER_WALLET_ADDRESS = process.env.MASTER_WALLET_ADDRESS!;
+
+const scalarFields = Object.values(Prisma.ChatCompletionJobScalarFieldEnum) as Prisma.ChatCompletionJobScalarFieldEnum[];
+
+function usdToUsdc(usd: Decimal | number): bigint {
+  const d = new Decimal(usd.toString());
+  return BigInt(d.mul(1_000_000).toFixed(0));
+}
+
+class ChatCompletionJobsProcessor extends BaseProcessor<ChatCompletionJob> {
+  constructor() {
+    super('chatCompletionJob', scalarFields);
+  }
+
+  protected override async getTargets(entity: ChatCompletionJob) {
+    const chat = await prisma.chat.findUnique({ where: { id: entity.chatId } });
+    return { chatId: entity.chatId, userId: chat?.userId };
+  }
+
+  protected override async onCreated(_job: Job, ccJob: ChatCompletionJob): Promise<void> {
+    const startTime = Date.now();
+
+    try {
+      const chat = await prisma.chat.findUnique({
+        where: { id: ccJob.chatId },
+        include: {
+          scenario: { include: { chatModel: { include: { aiProvider: true } } } },
+          user: true,
+        },
+      });
+      if (!chat) throw new Error('Chat not found');
+
+      // Get the user message that triggered this
+      const userMessage = ccJob.messageId
+        ? await prisma.message.findUnique({ where: { id: ccJob.messageId } })
+        : await prisma.message.findFirst({ where: { chatId: chat.id, role: 'USER' }, orderBy: { createdAt: 'desc' } });
+
+      if (!userMessage?.content) throw new Error('No user message content');
+
+      // Call LLM
+      const result = await chatCompletion(chat as any, userMessage.content);
+
+      // Calculate cost
+      const chatModel = chat.scenario.chatModel;
+      const inputCost = new Decimal(result.inputTokens).mul(chatModel.dollarPerInputToken);
+      const outputCost = new Decimal(result.outputTokens).mul(chatModel.dollarPerOutputToken);
+      const usdCost = inputCost.add(outputCost);
+
+      // Create ASSISTANT message
+      const assistantMessage = await prisma.message.create({
+        data: {
+          role: 'ASSISTANT',
+          content: result.content,
+          chat: { connect: { id: chat.id } },
+          user: { connect: { id: chat.userId } },
+        },
+      });
+      await enqueueCreated('message', assistantMessage);
+
+      // Update chatCompletionJob with metrics and enqueue (triggers usdCost field handler)
+      const original = ccJob;
+      const updated = await prisma.chatCompletionJob.update({
+        where: { id: ccJob.id },
+        data: {
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
+          totalTokens: result.totalTokens,
+          usdCost,
+          timeTakenMs: Date.now() - startTime,
+          message: { connect: { id: assistantMessage.id } },
+        },
+      });
+      await enqueueUpdated('chatCompletionJob', updated, original);
+
+      // Create transactions if cost > 0
+      await this.createTransactions(chat, assistantMessage.id, usdCost);
+
+      // TTS job is created by the messages processor when it sees the ASSISTANT message
+
+      console.log(`[chatCompletionJob] Completed: ${result.totalTokens} tokens, $${usdCost.toFixed(6)}`);
+    } catch (error: any) {
+      console.error(`[chatCompletionJob] Failed:`, JSON.stringify(error, Object.getOwnPropertyNames(error)));
+      await prisma.chatCompletionJob.update({
+        where: { id: ccJob.id },
+        data: { error: error.message, timeTakenMs: Date.now() - startTime },
+      });
+    }
+  }
+
+  private async createTransactions(chat: any, messageId: string, usdCost: Decimal): Promise<void> {
+    const scenario = chat.scenario;
+    const scenarioFee = new Decimal(scenario.dollarPerMessage);
+
+    if (usdCost.eq(0) && scenarioFee.eq(0)) return;
+
+    // Determine who pays (sponsor or user)
+    const sponsorship = await prisma.sponsorship.findFirst({ where: { scenarioId: scenario.id } });
+    const payer = sponsorship
+      ? await prisma.user.findUnique({ where: { id: sponsorship.userId } })
+      : chat.user;
+    if (!payer) return;
+
+    const fromAddress = payer.signerAddress;
+    const aiProvider = scenario.chatModel?.aiProvider;
+    const aiProviderUser = aiProvider ? await prisma.user.findUnique({ where: { id: aiProvider.userId } }) : null;
+
+    // ChatCompletion transaction
+    if (!usdCost.eq(0) && aiProviderUser && fromAddress !== aiProviderUser.signerAddress) {
+      const tx = await prisma.transaction.create({
+        data: {
+          type: 'chatCompletion',
+          fromAddress,
+          toAddress: aiProviderUser.signerAddress,
+          amountWei: usdToUsdc(usdCost),
+          message: { connect: { id: messageId } },
+        },
+      });
+      await enqueueCreated('transaction', tx);
+    }
+
+    // Scenario fee transaction
+    if (!scenarioFee.eq(0) && fromAddress !== MASTER_WALLET_ADDRESS) {
+      const tx = await prisma.transaction.create({
+        data: {
+          type: 'scenarioFee',
+          fromAddress,
+          toAddress: MASTER_WALLET_ADDRESS,
+          amountWei: usdToUsdc(scenarioFee),
+          message: { connect: { id: messageId } },
+        },
+      });
+      await enqueueCreated('transaction', tx);
+    }
+  }
+}
+
+export const chatCompletionJobsProcessor = new ChatCompletionJobsProcessor();

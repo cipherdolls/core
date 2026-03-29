@@ -1,0 +1,50 @@
+import type { Job } from 'bullmq';
+import { Prisma, type Avatar } from '@prisma/client';
+import { BaseProcessor } from '../queue/processor';
+import { prisma } from '../db';
+import { tts } from '../tts/tts.helper';
+
+const ASSETS_PATH = process.env.ASSETS_PATH ?? '/app/uploads';
+
+const scalarFields = Object.values(Prisma.AvatarScalarFieldEnum) as Prisma.AvatarScalarFieldEnum[];
+
+class AvatarsProcessor extends BaseProcessor<Avatar> {
+  constructor() {
+    super('avatar', scalarFields);
+  }
+
+  protected override getTargets(entity: Avatar) {
+    return { userId: entity.userId };
+  }
+
+  protected override getFieldHandlers(_job: Job, avatar: Avatar) {
+    return {
+      introduction: () => this.generateIntroductionAudio(avatar),
+      ttsVoiceId: () => this.generateIntroductionAudio(avatar),
+    };
+  }
+
+  private async generateIntroductionAudio(avatar: Avatar): Promise<void> {
+    if (!avatar.introduction) return;
+
+    try {
+      const voice = await prisma.ttsVoice.findUnique({ where: { id: avatar.ttsVoiceId } });
+      if (!voice) return;
+      const provider = await prisma.ttsProvider.findUnique({ where: { id: voice.ttsProviderId } });
+      if (!provider) return;
+
+      const result = await tts(avatar.introduction, voice, provider, `${ASSETS_PATH}/avatars`);
+
+      await prisma.avatar.update({
+        where: { id: avatar.id },
+        data: { introductionAudio: result.fileName },
+      });
+
+      console.log(`[avatar] Introduction audio generated for ${avatar.name}: ${result.fileName}`);
+    } catch (error: any) {
+      console.error(`[avatar] Failed to generate intro audio for ${avatar.name}: ${error.message}`);
+    }
+  }
+}
+
+export const avatarsProcessor = new AvatarsProcessor();

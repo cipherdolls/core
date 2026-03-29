@@ -1,0 +1,156 @@
+services:
+
+  # Test runner — runs E2E specs against broker + worker
+  bun:
+    build:
+      context: ../../core
+    command: ["bun", "test", "--timeout", "30000", "./test/all.e2e-spec.ts"]
+    stop_signal: SIGKILL
+    env_file: [.env]
+    extra_hosts:
+      - "${GPU_HOST}:host-gateway"
+    volumes:
+      - uploads:/app/uploads
+      - test-logs:/test-logs
+    environment:
+      BUN_TEST_TIMEOUT: "120000"
+      WORKER: "false"
+      BASE_URL: "http://broker:4000"
+      MQTT_BROKER_URL: "mqtt://broker:1883"
+      MQTT_BROKER_TCP: "false"
+      MQTT_BROKER_WS: "false"
+      NODE_ENV: test
+      REDIS_HOST: redis
+      RPC_URL: http://foundry:8545
+    depends_on:
+      redis: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      foundry: { condition: service_healthy }
+      worker: { condition: service_healthy }
+      broker: { condition: service_healthy }
+    networks: [test]
+
+
+  # Worker — runs BullMQ processors (chatCompletion, TTS, transactions, etc.)
+  worker:
+    build:
+      context: ../../core
+    stop_signal: SIGKILL
+    env_file: [.env]
+    extra_hosts:
+      - "${GPU_HOST}:host-gateway"
+    volumes:
+      - uploads:/app/uploads
+    environment:
+      WORKER: "true"
+      MQTT_BROKER_URL: "mqtt://broker:1883"
+      MQTT_BROKER_TCP: "false"
+      MQTT_BROKER_WS: "false"
+      NODE_ENV: test
+      REDIS_HOST: redis
+      RPC_URL: http://foundry:8545
+    expose:
+      - "4000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/auth/nonce || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    depends_on:
+      redis: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      foundry: { condition: service_healthy }
+    networks: [test]
+
+
+  # Broker — runs the API + embedded MQTT broker
+  broker:
+    build:
+      context: ../../core
+    stop_signal: SIGKILL
+    env_file: [.env]
+    extra_hosts:
+      - "${GPU_HOST}:host-gateway"
+    volumes:
+      - uploads:/app/uploads
+    environment:
+      WORKER: "false"
+      MQTT_BROKER_URL: "mqtt://broker:1883"
+      MQTT_BROKER_TCP: "true"
+      MQTT_BROKER_WS: "false"
+      NODE_ENV: test
+      REDIS_HOST: redis
+      RPC_URL: http://foundry:8545
+    expose:
+      - "1883"
+      - "4000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/auth/nonce || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    depends_on:
+      redis: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      foundry: { condition: service_healthy }
+    networks: [test]
+
+
+  postgres:
+    image: pgvector/pgvector:0.8.0-pg16
+    env_file: [.env]
+    expose:
+      - "5432"
+    environment:
+      POSTGRES_HOST: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres -h localhost"]
+      interval: 2s
+      timeout: 2s
+      retries: 60
+    networks: [test]
+
+
+  redis:
+    image: redis:8.4.1
+    pull_policy: always
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    networks: [test]
+
+
+  foundry:
+    image: ghcr.io/foundry-rs/foundry:latest
+    pull_policy: always
+    command: ["anvil
+      --fork-url https://mainnet.base.org
+      --chain-id 8453
+      --port 8545
+      "]
+    stop_signal: SIGKILL
+    environment:
+      ANVIL_IP_ADDR: "0.0.0.0"
+    expose:
+      - "8545"
+    healthcheck:
+      test: ["CMD-SHELL", "cast block-number --rpc-url http://localhost:8545 >/dev/null 2>&1"]
+      interval: 3s
+      timeout: 3s
+      retries: 100
+      start_period: 90s
+    networks: [test]
+
+
+networks:
+  test:
+    driver: bridge
+
+volumes:
+  uploads:
