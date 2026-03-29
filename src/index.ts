@@ -24,6 +24,7 @@ import { transactionsRoutes } from './transactions/routes';
 import { sponsorshipsRoutes } from './sponsorships/routes';
 import { tokenPermitsRoutes } from './tokenPermits/routes';
 import { firmwaresRoutes } from './firmwares/routes';
+import { picturesRoutes } from './pictures/routes';
 import { tokenRoutes } from './token/routes';
 import { startWorkers, stopWorkers } from './queue/startup';
 import { startBroker, stopBroker } from './mqtt/broker';
@@ -36,15 +37,16 @@ const app = new Elysia({ normalize: true })
   .use(swagger({ path: '/api' }))
   .onError(({ error, set }) => {
     const status = (set.status as number) ?? 500;
-    if (error.message === 'Missing authorization token' || error.message === 'Invalid authorization token') {
+    const message = 'message' in error ? (error as any).message : '';
+    if (message === 'Missing authorization token' || message === 'Invalid authorization token') {
       set.status = 401;
-      return { statusCode: 401, message: error.message };
+      return { statusCode: 401, message };
     }
-    if (error.message === 'Admin access required') {
+    if (message === 'Admin access required') {
       set.status = 403;
-      return { statusCode: 403, message: error.message };
+      return { statusCode: 403, message };
     }
-    return { statusCode: status, message: error.message };
+    return { statusCode: status, message };
   })
   .use(authRoutes)
   .use(usersRoutes)
@@ -66,6 +68,7 @@ const app = new Elysia({ normalize: true })
   .use(sponsorshipsRoutes)
   .use(tokenPermitsRoutes)
   .use(firmwaresRoutes)
+  .use(picturesRoutes)
   .use(tokenRoutes)
   .listen(port);
 

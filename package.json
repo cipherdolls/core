@@ -10,21 +10,24 @@
     "test:e2e": "bun test --preload ./test/setup.ts ./test/**/*.e2e-spec.ts"
   },
   "dependencies": {
-    "elysia": "1.2.25",
-    "@elysiajs/bearer": "1.2.0",
-    "@elysiajs/cors": "1.2.0",
-    "@elysiajs/swagger": "1.2.0",
+    "@elysiajs/bearer": "^1.2.0",
+    "@elysiajs/cors": "^1.2.0",
+    "@elysiajs/swagger": "^1.2.0",
     "@prisma/client": "^6.8.2",
-    "ethers": "^6.13.4",
-    "jsonwebtoken": "^9.0.2",
-    "bullmq": "^5.34.0",
-    "ioredis": "^5.6.0",
     "aedes": "^0.51.3",
+    "bullmq": "^5.34.0",
+    "elysia": "^1.2.25",
+    "ethers": "^6.13.4",
+    "ioredis": "^5.6.0",
+    "jsonwebtoken": "^9.0.2",
     "mqtt": "^5.10.4",
-    "websocket-stream": "^5.5.2"
+    "sharp": "^0.34.5",
+    "websocket-stream": "^5.5.2",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.9",
+    "@types/sharp": "^0.32.0",
     "bun-types": "latest",
     "prisma": "^6.8.2",
     "typescript": "^5.7"

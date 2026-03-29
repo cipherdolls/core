@@ -3,7 +3,7 @@
   "compilerOptions": {
     "module": "CommonJS",
     "moduleResolution": "node",
-    "types": ["jest", "node"],
+    "types": ["bun-types"],
     "rootDir": ".."
   },
   "include": ["./**/*.ts"]

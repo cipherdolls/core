@@ -1,4 +1,5 @@
-import { t, type TObject, type TProperties } from 'elysia';
+import { t } from 'elysia';
+import type { TObject, TProperties } from '@sinclair/typebox';
 
 /**
  * Body schema that allows additional properties.

@@ -10,7 +10,7 @@ SERVICES := redis postgres foundry worker broker
 
 SPECS := aiProviders auth avatars chatModels chats dollBodies dolls \
          embeddingModels messages transactions reasoningModels \
-         scenarios sponsorships sttProviders tokenPermits ttsProviders ttsVoices firmwares
+         scenarios sponsorships sttProviders tokenPermits ttsProviders ttsVoices firmwares pictures
 
 # Max time in seconds to wait for tests before force-killing (default 10min)
 TIMEOUT ?= 600

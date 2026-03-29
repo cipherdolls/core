@@ -48,7 +48,6 @@ export const ttsProvidersRoutes = new Elysia({ prefix: '/tts-providers' })
   }, {
     body: Body({
       name: t.String(),
-      picture: t.Optional(t.String()),
       dollarPerCharacter: t.Optional(t.Number()),
       censored: t.Optional(t.Boolean()),
     }),
@@ -60,7 +59,7 @@ export const ttsProvidersRoutes = new Elysia({ prefix: '/tts-providers' })
     if (!original) { set.status = 404; return { error: 'Not found' }; }
     const updated = await prisma.ttsProvider.update({
       where: { id: params.id },
-      data: pickFields(body, ['name', 'picture', 'dollarPerCharacter', 'censored']),
+      data: pickFields(body, ['name', 'dollarPerCharacter', 'censored']),
       include: { _count: { select: { ttsVoices: true } } },
     });
     await enqueueUpdated('ttsProvider', updated, original);
@@ -68,7 +67,6 @@ export const ttsProvidersRoutes = new Elysia({ prefix: '/tts-providers' })
   }, {
     body: Body({
       name: t.Optional(t.String()),
-      picture: t.Optional(t.String()),
       dollarPerCharacter: t.Optional(t.Number()),
       censored: t.Optional(t.Boolean()),
     }),

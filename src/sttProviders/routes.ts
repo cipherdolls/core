@@ -41,7 +41,6 @@ export const sttProvidersRoutes = new Elysia({ prefix: '/stt-providers' })
   }, {
     body: Body({
       name: t.String(),
-      picture: t.Optional(t.String()),
       recommended: t.Optional(t.Boolean()),
       dollarPerSecond: t.Optional(t.Number()),
       free: t.Optional(t.Boolean()),
@@ -53,7 +52,7 @@ export const sttProvidersRoutes = new Elysia({ prefix: '/stt-providers' })
     const item = await prisma.sttProvider.findUnique({ where: { id: params.id } });
     if (!item) { set.status = 404; return { error: 'Not found' }; }
     // Auto-compute free flag when dollarPerSecond changes
-    const data = pickFields(body, ['name', 'picture', 'recommended', 'dollarPerSecond', 'free']);
+    const data = pickFields(body, ['name', 'recommended', 'dollarPerSecond', 'free']);
     if (body.dollarPerSecond !== undefined && body.free === undefined) {
       data.free = body.dollarPerSecond === 0;
     }
@@ -61,7 +60,6 @@ export const sttProvidersRoutes = new Elysia({ prefix: '/stt-providers' })
   }, {
     body: Body({
       name: t.Optional(t.String()),
-      picture: t.Optional(t.String()),
       recommended: t.Optional(t.Boolean()),
       dollarPerSecond: t.Optional(t.Number()),
       free: t.Optional(t.Boolean()),

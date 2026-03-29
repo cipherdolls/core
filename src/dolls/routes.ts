@@ -154,7 +154,6 @@ export const dollsRoutes = new Elysia({ prefix: '/dolls' })
         where: { id: params.id },
         data: {
           ...(body.name !== undefined ? { name: body.name } : {}),
-          ...(body.picture !== undefined ? { picture: body.picture } : {}),
           ...(body.chatId === null ? { chat: { disconnect: true } } : body.chatId !== undefined ? { chat: { connect: { id: body.chatId } } } : {}),
         },
       });
@@ -165,7 +164,6 @@ export const dollsRoutes = new Elysia({ prefix: '/dolls' })
       body: Body({
         chatId: t.Optional(t.Nullable(t.String())),
         name: t.Optional(t.String()),
-        picture: t.Optional(t.String()),
       }),
     },
   )

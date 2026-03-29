@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Chat" ADD COLUMN     "tts" BOOLEAN NOT NULL DEFAULT true;

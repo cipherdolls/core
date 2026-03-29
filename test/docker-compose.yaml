@@ -154,3 +154,4 @@ networks:
 
 volumes:
   uploads:
+  test-logs:

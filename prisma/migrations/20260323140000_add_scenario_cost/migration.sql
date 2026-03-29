@@ -1,0 +1,6 @@
+-- AlterTable
+ALTER TABLE "Scenario" ADD COLUMN "dollarPerMessage" DECIMAL(19,9) NOT NULL DEFAULT 0;
+ALTER TABLE "Scenario" ADD COLUMN "free" BOOLEAN NOT NULL DEFAULT false;
+
+-- AlterTable
+ALTER TABLE "Avatar" ADD COLUMN "free" BOOLEAN NOT NULL DEFAULT false;

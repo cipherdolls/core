@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Doll" ADD COLUMN     "rssi" INTEGER NOT NULL DEFAULT 0;

@@ -1,6 +1,6 @@
 FROM oven/bun:1.2-alpine
 
-RUN apk add --no-cache redis
+RUN apk add --no-cache redis vips-dev
 
 WORKDIR /app
 
