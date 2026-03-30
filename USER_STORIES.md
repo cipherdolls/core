@@ -26,6 +26,7 @@ Derived from E2E test specs. Each story represents verified behavior tested agai
 - Users cannot connect with an invalid JWT
 - Users cannot subscribe to another user's topics
 
+
 ---
 
 ## Token Permits & Balances
