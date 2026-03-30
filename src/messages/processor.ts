@@ -33,10 +33,30 @@ class MessagesProcessor extends BaseProcessor<Message> {
 
   private async handleUserCreated(message: Message): Promise<void> {
     const hasText = Boolean(message.content?.trim().length);
-    if (hasText) {
+    const hasAudio = Boolean(message.fileName);
+
+    if (hasAudio && hasText) {
+      console.log(`[message] User message with audio+text. Using text, ignoring audio.`);
+      await this.createChatCompletionJob(message);
+      await this.createEmbeddingJob(message);
+    } else if (hasAudio) {
+      console.log(`[message] User audio-only message. Enqueue STT.`);
+      const chat = await prisma.chat.findUnique({ where: { id: message.chatId } });
+      if (chat?.sttProviderId) {
+        const sttJob = await prisma.sttJob.create({
+          data: {
+            message: { connect: { id: message.id } },
+            sttProvider: { connect: { id: chat.sttProviderId } },
+          },
+        });
+        await enqueueCreated('sttJob', sttJob);
+      }
+    } else if (hasText) {
       console.log(`[message] User text message. Enqueue chatCompletion + embedding.`);
       await this.createChatCompletionJob(message);
       await this.createEmbeddingJob(message);
+    } else {
+      console.warn(`[message] User message ${message.id} has neither audio nor text`);
     }
   }
 

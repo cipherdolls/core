@@ -1,5 +1,5 @@
 
-import { auth, api, get, connectMqtt, waitForEvents, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
+import { auth, api, get, connectMqtt, waitForEvents, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
 import { chatModelId } from './chatModels';
 import { embeddingModelId } from './embeddingModels';
 import { reasoningModelId } from './reasoningModels';
@@ -516,6 +516,16 @@ export function describeScenarios() {
       expect(body.data.length).toBe(1);
     });
 
+    it('alice cannot delete her own published scenario', async () => {
+      // Find a published scenario owned by alice
+      const { body: scenarios } = await api('GET', '/scenarios?mine=true', auth.alice.jwt);
+      const published = scenarios.data.find((s: any) => s.published);
+      if (published) {
+        const { status } = await api('DELETE', `/scenarios/${published.id}`, auth.alice.jwt);
+        expect(status).toBe(403);
+      }
+    });
+
     // ─── Model clearing (set embeddingModelId/reasoningModelId to null) ─
 
     it('alice post a scenario without embedding and reasoning models', async () => {
@@ -640,6 +650,22 @@ export function describeScenarios() {
     });
 
     // ─── Cleanup MQTT ──────────────────────────────────────────
+
+    it('consume remaining events from scenario operations', async () => {
+      await waitForQueuesEmpty();
+      await new Promise((r) => setTimeout(r, 500));
+      aliceUserProcessEvents = [];
+      bobUserProcessEvents = [];
+    });
+
+    it('no unprocessed events remaining', async () => {
+      await waitForQueuesEmpty();
+      await new Promise((r) => setTimeout(r, 500));
+      if (aliceUserProcessEvents.length > 0) console.log('Unprocessed alice user events:', aliceUserProcessEvents.length, aliceUserProcessEvents);
+      if (bobUserProcessEvents.length > 0) console.log('Unprocessed bob user events:', bobUserProcessEvents.length, bobUserProcessEvents);
+      expect(aliceUserProcessEvents.length).toBe(0);
+      expect(bobUserProcessEvents.length).toBe(0);
+    });
 
     it('disconnect alice MQTT client', async () => {
       aliceMqttClient.end();

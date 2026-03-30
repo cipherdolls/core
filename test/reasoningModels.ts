@@ -1,5 +1,5 @@
 
-import { auth, api, get, connectMqtt, waitForEvents, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
+import { auth, api, get, connectMqtt, waitForEvents, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
 
 // Module-level ID for cross-test imports
 export let reasoningModelId: string;
@@ -168,6 +168,19 @@ export function describeReasoningModels() {
     });
 
     // ─── MQTT cleanup ─────────────────────────────────────────
+
+    it('consume remaining events from reasoning model operations', async () => {
+      await waitForQueuesEmpty();
+      await new Promise((r) => setTimeout(r, 500));
+      adminUserProcessEvents = [];
+    });
+
+    it('no unprocessed events remaining', async () => {
+      await waitForQueuesEmpty();
+      await new Promise((r) => setTimeout(r, 500));
+      if (adminUserProcessEvents.length > 0) console.log('Unprocessed admin user events:', adminUserProcessEvents.length, adminUserProcessEvents);
+      expect(adminUserProcessEvents.length).toBe(0);
+    });
 
     it('close admin MQTT client for reasoningModels', () => {
       adminMqttClient?.end();

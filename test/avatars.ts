@@ -1,5 +1,5 @@
 
-import { auth, api, get, connectMqtt, waitForEvents, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
+import { auth, api, get, connectMqtt, waitForEvents, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
 
 export let hanaAvatarId: string;
 export let freyaAvatarId: string;
@@ -822,7 +822,45 @@ export function describeAvatars() {
       aliceUserProcessEvents = [];
     });
 
+    // ─── Cascade delete ─────────────────────────────────────────
+
+    it('deleting an avatar cascades to its chats', async () => {
+      // Create a temporary avatar + chat
+      const { body: ttsVoices } = await api('GET', '/tts-voices', auth.alice.jwt);
+      const { body: tempAvatar } = await api('POST', '/avatars', auth.alice.jwt, {
+        name: 'TempCascade', shortDesc: 'test', character: 'test',
+        ttsVoiceId: ttsVoices.data[0].id,
+      });
+      const { body: scenarios } = await api('GET', '/scenarios?published=true', auth.alice.jwt);
+      const { body: tempChat } = await api('POST', '/chats', auth.alice.jwt, {
+        avatarId: tempAvatar.id, scenarioId: scenarios.data[0].id, tts: false,
+      });
+      const chatId = tempChat.id;
+
+      // Delete the avatar
+      const { status } = await api('DELETE', `/avatars/${tempAvatar.id}`, auth.alice.jwt);
+      expect(status).toBe(200);
+
+      // Chat should be gone
+      const { status: chatStatus } = await api('GET', `/chats/${chatId}`, auth.alice.jwt);
+      expect(chatStatus).toBe(404);
+    });
+
+    it('drain events after cascade delete test', async () => {
+      await new Promise((r) => setTimeout(r, 2000));
+      aliceUserProcessEvents = [];
+    });
+
     // ─── MQTT cleanup ──────────────────────────────────────────
+
+    it('no unprocessed events remaining', async () => {
+      await waitForQueuesEmpty();
+      await new Promise((r) => setTimeout(r, 500));
+      if (aliceUserProcessEvents.length > 0) console.log('Unprocessed alice user events:', aliceUserProcessEvents.length, aliceUserProcessEvents);
+      if (bobUserProcessEvents.length > 0) console.log('Unprocessed bob user events:', bobUserProcessEvents.length, bobUserProcessEvents);
+      expect(aliceUserProcessEvents.length).toBe(0);
+      expect(bobUserProcessEvents.length).toBe(0);
+    });
 
     it('disconnect alice MQTT client', () => {
       aliceMqttClient.end();

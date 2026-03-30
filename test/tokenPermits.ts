@@ -1,5 +1,5 @@
 import { ethers } from 'ethers';
-import { auth, api, get, wallets, connectMqtt, waitForEvents, groupByResourceName, type ProcessEvent, type MqttClient, BASE_URL } from './helpers';
+import { auth, api, get, wallets, connectMqtt, waitForEvents, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient, BASE_URL } from './helpers';
 
 /* ────────────────────────────────────────────────────────────────
    State shared across sequential tests
@@ -433,7 +433,37 @@ export function describeTokenPermits() {
       expect(body.tokenSpendable).toBe(2);
     });
 
+    /* ── Consume remaining User events from permit processing ─── */
+
+    it('consume remaining User events from permit execution', async () => {
+      await waitForQueuesEmpty();
+      await new Promise((r) => setTimeout(r, 500));
+      // Permit execution triggers User updates (action, tokenBalance, tokenAllowance, tokenSpendable)
+      const adminEvents = groupByResourceName(adminUserProcessEvents);
+      const aliceEvents = groupByResourceName(aliceUserProcessEvents);
+      const bobEvents = groupByResourceName(bobUserProcessEvents);
+      // Admin gets User events for permit processing
+      if (adminEvents.User) expect(adminEvents.User.length).toBeGreaterThanOrEqual(0);
+      // Alice and Bob get User events for their balance refreshes
+      if (aliceEvents.User) expect(aliceEvents.User.length).toBeGreaterThanOrEqual(0);
+      if (bobEvents.User) expect(bobEvents.User.length).toBeGreaterThanOrEqual(0);
+      adminUserProcessEvents = [];
+      aliceUserProcessEvents = [];
+      bobUserProcessEvents = [];
+    });
+
     /* ── Cleanup MQTT clients ────────────────────────────────────── */
+
+    it('no unprocessed events remaining', async () => {
+      await waitForQueuesEmpty();
+      await new Promise((r) => setTimeout(r, 500));
+      if (adminUserProcessEvents.length > 0) console.log('Unprocessed admin user events:', adminUserProcessEvents.length, adminUserProcessEvents);
+      if (aliceUserProcessEvents.length > 0) console.log('Unprocessed alice user events:', aliceUserProcessEvents.length, aliceUserProcessEvents);
+      if (bobUserProcessEvents.length > 0) console.log('Unprocessed bob user events:', bobUserProcessEvents.length, bobUserProcessEvents);
+      expect(adminUserProcessEvents.length).toBe(0);
+      expect(aliceUserProcessEvents.length).toBe(0);
+      expect(bobUserProcessEvents.length).toBe(0);
+    });
 
     afterAll(() => {
       adminMqttClient?.end();

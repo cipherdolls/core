@@ -3,7 +3,7 @@ import { Prisma, type User } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { BaseProcessor } from '../queue/processor';
 import { prisma } from '../db';
-import { enqueueUpdated } from '../queue/enqueue';
+import { enqueueUpdated, enqueueDeleted } from '../queue/enqueue';
 import * as tokenService from '../token/token.service';
 
 const scalarFields = Object.values(Prisma.UserScalarFieldEnum) as Prisma.UserScalarFieldEnum[];
@@ -43,7 +43,24 @@ class UsersProcessor extends BaseProcessor<User> {
             return;
         }
       },
+      tokenSpendable: async () => {
+        await this.removeExpiredSponsorships(user);
+      },
     };
+  }
+
+  private async removeExpiredSponsorships(user: User): Promise<void> {
+    const spendable = Number(user.tokenSpendable ?? 0);
+    if (spendable >= 1) return;
+
+    const sponsorships = await prisma.sponsorship.findMany({ where: { userId: user.id } });
+    if (sponsorships.length === 0) return;
+
+    console.log(`[user] tokenSpendable below 1 (${spendable}) for ${user.id} — removing ${sponsorships.length} sponsorship(s)`);
+    for (const sponsorship of sponsorships) {
+      await prisma.sponsorship.delete({ where: { id: sponsorship.id } });
+      await enqueueDeleted('sponsorship', sponsorship);
+    }
   }
 
   private async refreshTokenBalance(user: User): Promise<void> {

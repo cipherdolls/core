@@ -1,5 +1,5 @@
 
-import { auth, api, get } from './helpers';
+import { auth, api, get, connectMqtt, waitForEvents, groupByResourceName, BASE_URL, type ProcessEvent, type MqttClient } from './helpers';
 
 export function describeMessages() {
   describe('Messages', () => {
@@ -7,6 +7,16 @@ export function describeMessages() {
     let hanaChatId: string;
     let joiChatId: string;
     let joiChatMessage1Id: string;
+
+    let aliceMqttClient: MqttClient;
+    let aliceChatProcessEvents: ProcessEvent[] = [];
+    let aliceUserProcessEvents: ProcessEvent[] = [];
+
+    // ─── MQTT setup ───────────────────────────────────────────
+
+    it('connect alice MQTT client for messages', async () => {
+      aliceMqttClient = await connectMqtt(auth.alice.jwt);
+    });
 
     // ─── Setup: fetch chats ────────────────────────────────────
 
@@ -23,6 +33,26 @@ export function describeMessages() {
       }
       expect(hanaChatId).toBeDefined();
       expect(joiChatId).toBeDefined();
+
+      // Subscribe to MQTT topics for both chats
+      aliceMqttClient.subscribe(`users/${auth.alice.userId}/processEvents`);
+      aliceMqttClient.subscribe(`chats/${hanaChatId}/processEvents`);
+      aliceMqttClient.subscribe(`chats/${joiChatId}/processEvents`);
+      aliceMqttClient.on('message', (topic, msg) => {
+        const [resourceType] = topic.split('/');
+        const event = JSON.parse(msg.toString()) as ProcessEvent;
+        if (resourceType === 'users') {
+          aliceUserProcessEvents.push(event);
+        } else if (resourceType === 'chats') {
+          aliceChatProcessEvents.push(event);
+        }
+      });
+    });
+
+    it('drain late events from previous modules', async () => {
+      await new Promise((r) => setTimeout(r, 2000));
+      aliceUserProcessEvents = [];
+      aliceChatProcessEvents = [];
     });
 
     // ─── Get greeting messages ─────────────────────────────────
@@ -67,6 +97,25 @@ export function describeMessages() {
       expect(body.meta).toHaveProperty('limit');
       expect(Array.isArray(body.data)).toBe(true);
       expect(body.data.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('alice can read ALL messages in her chat (USER + ASSISTANT roles)', async () => {
+      const { status, body } = await api('GET', `/messages?chatId=${joiChatId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+      // meta.total matches the actual data length (no messages hidden)
+      expect(body.data.length).toBe(body.meta.total);
+      // Chat contains both USER and ASSISTANT messages
+      const roles = body.data.map((m: any) => m.role);
+      expect(roles).toContain('USER');
+      expect(roles).toContain('ASSISTANT');
+      // Every message has content or fileName
+      for (const msg of body.data) {
+        expect(msg.content !== null || msg.fileName !== null).toBe(true);
+      }
+      // Every message belongs to this chat
+      for (const msg of body.data) {
+        expect(msg.chatId).toBe(joiChatId);
+      }
     });
 
     // ─── Anonymous access tests ────────────────────────────────
@@ -141,6 +190,34 @@ export function describeMessages() {
       const { status, body } = await api('GET', `/messages?chatId=${joiChatId}`, auth.bob.jwt);
       expect(status).toBe(200);
       expect(body.data.length).toBe(0);
+      expect(body.meta.total).toBe(0);
+    });
+
+    it('alice cannot read messages from bob chat', async () => {
+      // Create a temporary chat for bob
+      const { body: avatars } = await api('GET', '/avatars?published=true', auth.bob.jwt);
+      const { body: scenarios } = await api('GET', '/scenarios?published=true', auth.bob.jwt);
+      const { body: bobChat } = await api('POST', '/chats', auth.bob.jwt, {
+        avatarId: avatars.data[0].id,
+        scenarioId: scenarios.data[0].id,
+        tts: false,
+      });
+      // Bob posts a message
+      await api('POST', '/messages', auth.bob.jwt, {
+        chatId: bobChat.id,
+        content: 'This is private to bob',
+      });
+      // Alice tries to read bob's chat messages — gets empty
+      const { status, body } = await api('GET', `/messages?chatId=${bobChat.id}`, auth.alice.jwt);
+      expect(status).toBe(200);
+      expect(body.data.length).toBe(0);
+      expect(body.meta.total).toBe(0);
+      // Bob can read his own messages
+      const { body: bobMsgs } = await api('GET', `/messages?chatId=${bobChat.id}`, auth.bob.jwt);
+      expect(bobMsgs.data.length).toBeGreaterThan(0);
+      expect(bobMsgs.meta.total).toBeGreaterThan(0);
+      // Cleanup
+      await api('DELETE', `/chats/${bobChat.id}`, auth.bob.jwt);
     });
 
     it('bob cannot POST a message to alice joiChat', async () => {
@@ -151,15 +228,45 @@ export function describeMessages() {
       expect(status).toBe(403);
     });
 
-    it('bob CAN get alice message by ID (no ownership check on findOne)', async () => {
-      const { status, body } = await api('GET', `/messages/${joiChatMessage1Id}`, auth.bob.jwt);
-      expect(status).toBe(200);
-      expect(body).toHaveProperty('id', joiChatMessage1Id);
+    it('bob CANNOT get alice message by ID (403)', async () => {
+      const { status } = await api('GET', `/messages/${joiChatMessage1Id}`, auth.bob.jwt);
+      expect(status).toBe(403);
     });
 
     it('bob cannot DELETE alice joiChat message', async () => {
       const { status } = await api('DELETE', `/messages/${joiChatMessage1Id}`, auth.bob.jwt);
       expect(status).toBe(403);
+    });
+
+    // ─── PATCH message ──────────────────────────────────────────
+
+    it('alice can update her message content', async () => {
+      // Post a message first
+      const { body: msg } = await api('POST', '/messages', auth.alice.jwt, {
+        chatId: joiChatId,
+        content: 'original content',
+      });
+      const { status, body } = await api('PATCH', `/messages/${msg.id}`, auth.alice.jwt, {
+        content: 'updated content',
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('content', 'updated content');
+    });
+
+    it('bob cannot update alice message (403)', async () => {
+      const { body: msgs } = await api('GET', `/messages?chatId=${joiChatId}`, auth.alice.jwt);
+      const msgId = msgs.data[0].id;
+      const { status } = await api('PATCH', `/messages/${msgId}`, auth.bob.jwt, {
+        content: 'hacked',
+      });
+      expect(status).toBe(403);
+    });
+
+    it('PATCH non-existent message returns 404', async () => {
+      const { status } = await api('PATCH', '/messages/00000000-0000-0000-0000-000000000000', auth.alice.jwt, {
+        content: 'test',
+      });
+      expect(status).toBe(404);
     });
 
     // ─── Delete message ────────────────────────────────────────
@@ -183,6 +290,374 @@ export function describeMessages() {
     it('deleted message returns 404', async () => {
       const { status } = await api('GET', `/messages/${deleteTestMessageId}`, auth.alice.jwt);
       expect(status).toBe(404);
+    });
+
+    // ─── Scenario switch + AI response tests ──────────────────
+
+    it('alice switches hanaChat to Small Talk scenario with tts off', async () => {
+      const { body: scenarios } = await api('GET', '/scenarios?name=Small+Talk', auth.alice.jwt);
+      const smallTalkScenario = scenarios.data[0];
+      expect(smallTalkScenario).toBeTruthy();
+
+      const { status, body } = await api('PATCH', `/chats/${hanaChatId}`, auth.alice.jwt, {
+        scenarioId: smallTalkScenario.id,
+        tts: false,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('scenarioId', smallTalkScenario.id);
+      expect(body).toHaveProperty('tts', false);
+    });
+
+    it('drain events after scenario switch', async () => {
+      await new Promise((r) => setTimeout(r, 5000));
+      aliceChatProcessEvents = [];
+      aliceUserProcessEvents = [];
+    });
+
+    // ─── Message: "What is the capital of Germany?" ───────────
+
+    let messageCountBeforeGermany: number;
+
+    it('count messages before Germany question', async () => {
+      const { body } = await api('GET', `/messages?chatId=${hanaChatId}`, auth.alice.jwt);
+      messageCountBeforeGermany = body.meta.total;
+    });
+
+    it('alice posts "What is the capital of Germany?" to hanaChat', async () => {
+      const { status, body } = await api('POST', '/messages', auth.alice.jwt, {
+        chatId: hanaChatId,
+        content: 'What is the capital of Germany?',
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('id');
+    });
+
+    it('hanaChat has 2 more messages after Germany question (USER + ASSISTANT)', async () => {
+      let total = messageCountBeforeGermany;
+      for (let i = 0; i < 25; i++) {
+        await new Promise((r) => setTimeout(r, 1000));
+        const { body } = await api('GET', `/messages?chatId=${hanaChatId}`, auth.alice.jwt);
+        total = body.meta.total;
+        if (total >= messageCountBeforeGermany + 2) break;
+      }
+      expect(total).toBeGreaterThanOrEqual(messageCountBeforeGermany + 2);
+    });
+
+    it('AI response contains "Berlin"', async () => {
+      const { body } = await api('GET', `/messages?chatId=${hanaChatId}`, auth.alice.jwt);
+      const assistantMsg = body.data.find((m: any) => m.role === 'ASSISTANT' && m.content?.toLowerCase().includes('berlin'));
+      expect(assistantMsg).toBeTruthy();
+    });
+
+    // ─── Message: "What is the capital of France?" ────────────
+
+    let messageCountBeforeFrance: number;
+
+    it('count messages before France question', async () => {
+      const { body } = await api('GET', `/messages?chatId=${hanaChatId}`, auth.alice.jwt);
+      messageCountBeforeFrance = body.meta.total;
+    });
+
+    it('alice posts "What is the capital of France?" to hanaChat', async () => {
+      const { status, body } = await api('POST', '/messages', auth.alice.jwt, {
+        chatId: hanaChatId,
+        content: 'What is the capital of France?',
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('id');
+    });
+
+    it('hanaChat has 2 more messages after France question (USER + ASSISTANT)', async () => {
+      let total = messageCountBeforeFrance;
+      for (let i = 0; i < 25; i++) {
+        await new Promise((r) => setTimeout(r, 1000));
+        const { body } = await api('GET', `/messages?chatId=${hanaChatId}`, auth.alice.jwt);
+        total = body.meta.total;
+        if (total >= messageCountBeforeFrance + 2) break;
+      }
+      expect(total).toBeGreaterThanOrEqual(messageCountBeforeFrance + 2);
+    });
+
+    it('AI response contains "Paris"', async () => {
+      const { body } = await api('GET', `/messages?chatId=${hanaChatId}`, auth.alice.jwt);
+      const assistantMsg = body.data.find((m: any) => m.role === 'ASSISTANT' && m.content?.toLowerCase().includes('paris'));
+      expect(assistantMsg).toBeTruthy();
+    });
+
+    // ─── Audio message tests ────────────────────────────────────
+
+    let audioMessageId: string;
+
+    it('alice uploads an audio message to hanaChat via multipart', async () => {
+      // Create a minimal MP3 file (MPEG frame header + silence)
+      const mp3Header = new Uint8Array([
+        0xFF, 0xFB, 0x90, 0x00, // MPEG1 Layer3 frame header
+        ...new Array(417).fill(0), // silence padding (one frame)
+      ]);
+
+      const formData = new FormData();
+      formData.append('chatId', hanaChatId);
+      formData.append('file', new File([mp3Header.buffer as ArrayBuffer], 'audio.mp3', { type: 'audio/mpeg' }));
+
+      const res = await fetch(`${BASE_URL}/messages`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${auth.alice.jwt}` },
+        body: formData,
+      });
+      const body = await res.json();
+      expect(res.status).toBe(200);
+      expect(body).toHaveProperty('id');
+      expect(body).toHaveProperty('fileName');
+      expect(body.fileName).toMatch(/\.mp3$/);
+      expect(body.content).toBeNull();
+      audioMessageId = body.id;
+    });
+
+    it('alice can get the audio message by ID', async () => {
+      const { status, body } = await api('GET', `/messages/${audioMessageId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('id', audioMessageId);
+      expect(body).toHaveProperty('fileName');
+      expect(body.fileName).toMatch(/\.mp3$/);
+    });
+
+    it('alice can download the audio file', async () => {
+      const res = await fetch(`${BASE_URL}/messages/${audioMessageId}/audio`, {
+        headers: { Authorization: `Bearer ${auth.alice.jwt}` },
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toBe('audio/mpeg');
+      const buffer = await res.arrayBuffer();
+      expect(buffer.byteLength).toBeGreaterThan(0);
+    });
+
+    it('audio endpoint returns 404 for message without audio', async () => {
+      // Find a text-only message
+      const { body: msgs } = await api('GET', `/messages?chatId=${hanaChatId}`, auth.alice.jwt);
+      const textMsg = msgs.data.find((m: any) => !m.fileName);
+      expect(textMsg).toBeTruthy();
+
+      const res = await fetch(`${BASE_URL}/messages/${textMsg.id}/audio`, {
+        headers: { Authorization: `Bearer ${auth.alice.jwt}` },
+      });
+      expect(res.status).toBe(404);
+    });
+
+    it('audio endpoint returns 404 for non-existent message', async () => {
+      const res = await fetch(`${BASE_URL}/messages/00000000-0000-0000-0000-000000000000/audio`, {
+        headers: { Authorization: `Bearer ${auth.alice.jwt}` },
+      });
+      expect(res.status).toBe(404);
+    });
+
+    it('alice uploads audio+text message (text takes priority)', async () => {
+      const mp3Header = new Uint8Array([0xFF, 0xFB, 0x90, 0x00, ...new Array(417).fill(0)]);
+
+      const formData = new FormData();
+      formData.append('chatId', hanaChatId);
+      formData.append('content', 'Text with audio attached');
+      formData.append('file', new File([mp3Header.buffer as ArrayBuffer], 'voice.mp3', { type: 'audio/mpeg' }));
+
+      const res = await fetch(`${BASE_URL}/messages`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${auth.alice.jwt}` },
+        body: formData,
+      });
+      const body = await res.json();
+      expect(res.status).toBe(200);
+      expect(body).toHaveProperty('content', 'Text with audio attached');
+      expect(body).toHaveProperty('fileName');
+      expect(body.fileName).toMatch(/\.mp3$/);
+    });
+
+    it('alice deletes the audio message', async () => {
+      const { status } = await api('DELETE', `/messages/${audioMessageId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+    });
+
+    it('deleted audio message returns 404', async () => {
+      const res = await fetch(`${BASE_URL}/messages/${audioMessageId}/audio`, {
+        headers: { Authorization: `Bearer ${auth.alice.jwt}` },
+      });
+      expect(res.status).toBe(404);
+    });
+
+    // ─── Kokoro TTS → audio message → STT → LLM → TTS → Whisper ──
+
+    const KOKORO_URL = process.env.CIPHERDOLLS_KOKORO_URL ?? 'https://kokoro.ffaerber.duckdns.org';
+    const WHISPER_URL = process.env.WHISPER_URL ?? 'https://whisper.ffaerber.duckdns.org';
+    let kokoroAudioBuffer: ArrayBuffer;
+    let kokoroAudioMessageId: string;
+    let messageCountBeforeKokoro: number;
+
+    it('drain events before Kokoro pipeline', async () => {
+      await new Promise((r) => setTimeout(r, 2000));
+      aliceChatProcessEvents = [];
+      aliceUserProcessEvents = [];
+    });
+
+    it('alice enables TTS on hanaChat', async () => {
+      const { status, body } = await api('PATCH', `/chats/${hanaChatId}`, auth.alice.jwt, { tts: true });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('tts', true);
+    });
+
+    it('generate audio via Kokoro TTS asking "What is the capital of Italy?"', async () => {
+      const res = await fetch(`${KOKORO_URL}/v1/audio/speech`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'kokoro',
+          input: 'What is the capital of Italy?',
+          voice: 'af_heart',
+          response_format: 'mp3',
+        }),
+      });
+      expect(res.status).toBe(200);
+      kokoroAudioBuffer = await res.arrayBuffer();
+      expect(kokoroAudioBuffer.byteLength).toBeGreaterThan(1000);
+    });
+
+    it('count messages before Kokoro audio upload', async () => {
+      const { body } = await api('GET', `/messages?chatId=${hanaChatId}`, auth.alice.jwt);
+      messageCountBeforeKokoro = body.meta.total;
+    });
+
+    it('alice uploads the Kokoro audio as a message to hanaChat', async () => {
+      const formData = new FormData();
+      formData.append('chatId', hanaChatId);
+      formData.append('file', new File([kokoroAudioBuffer], 'kokoro.mp3', { type: 'audio/mpeg' }));
+
+      const res = await fetch(`${BASE_URL}/messages`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${auth.alice.jwt}` },
+        body: formData,
+      });
+      const body = await res.json();
+      expect(res.status).toBe(200);
+      expect(body).toHaveProperty('id');
+      expect(body).toHaveProperty('fileName');
+      expect(body.fileName).toMatch(/\.mp3$/);
+      expect(body.content).toBeNull();
+      kokoroAudioMessageId = body.id;
+    });
+
+    it('Kokoro audio file is downloadable and valid MP3', async () => {
+      const res = await fetch(`${BASE_URL}/messages/${kokoroAudioMessageId}/audio`, {
+        headers: { Authorization: `Bearer ${auth.alice.jwt}` },
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toBe('audio/mpeg');
+      const buffer = await res.arrayBuffer();
+      expect(buffer.byteLength).toBeGreaterThan(1000);
+    });
+
+    it('STT transcribes the audio and populates the message content with "italy" or "capital"', async () => {
+      // Poll until the message content is populated by the STT pipeline
+      let content: string | null = null;
+      for (let i = 0; i < 25; i++) {
+        await new Promise((r) => setTimeout(r, 1000));
+        const { body } = await api('GET', `/messages/${kokoroAudioMessageId}`, auth.alice.jwt);
+        content = body.content;
+        if (content) break;
+      }
+      expect(content).toBeTruthy();
+      const lower = content!.toLowerCase();
+      expect(lower.includes('italy') || lower.includes('capital')).toBe(true);
+    });
+
+    it('pipeline creates an ASSISTANT response after STT transcription', async () => {
+      let total = messageCountBeforeKokoro;
+      for (let i = 0; i < 25; i++) {
+        await new Promise((r) => setTimeout(r, 1000));
+        const { body } = await api('GET', `/messages?chatId=${hanaChatId}`, auth.alice.jwt);
+        total = body.meta.total;
+        if (total >= messageCountBeforeKokoro + 2) break;
+      }
+      expect(total).toBeGreaterThanOrEqual(messageCountBeforeKokoro + 2);
+    });
+
+    let assistantRomeMessageId: string;
+
+    it('ASSISTANT response to audio question contains "Rome"', async () => {
+      const { body } = await api('GET', `/messages?chatId=${hanaChatId}`, auth.alice.jwt);
+      const assistantMsg = body.data.find((m: any) => m.role === 'ASSISTANT' && m.content?.toLowerCase().includes('rome'));
+      expect(assistantMsg).toBeTruthy();
+      assistantRomeMessageId = assistantMsg.id;
+    });
+
+    it('ASSISTANT message has TTS audio file generated', async () => {
+      // Poll until the TTS job generates a fileName on the assistant message
+      let fileName: string | null = null;
+      for (let i = 0; i < 25; i++) {
+        await new Promise((r) => setTimeout(r, 1000));
+        const { body } = await api('GET', `/messages/${assistantRomeMessageId}`, auth.alice.jwt);
+        fileName = body.fileName;
+        if (fileName) break;
+      }
+      expect(fileName).toBeTruthy();
+      expect(fileName).toMatch(/\.mp3$/);
+    });
+
+    it('ASSISTANT audio is downloadable', async () => {
+      const res = await fetch(`${BASE_URL}/messages/${assistantRomeMessageId}/audio`, {
+        headers: { Authorization: `Bearer ${auth.alice.jwt}` },
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toBe('audio/mpeg');
+      const buffer = await res.arrayBuffer();
+      expect(buffer.byteLength).toBeGreaterThan(1000);
+    });
+
+    it('Whisper transcription of ASSISTANT audio contains "Rome"', async () => {
+      const audioRes = await fetch(`${BASE_URL}/messages/${assistantRomeMessageId}/audio`, {
+        headers: { Authorization: `Bearer ${auth.alice.jwt}` },
+      });
+      const audioBuffer = await audioRes.arrayBuffer();
+
+      const formData = new FormData();
+      formData.append('audio_file', new File([audioBuffer], 'assistant.mp3', { type: 'audio/mpeg' }));
+
+      const whisperRes = await fetch(`${WHISPER_URL}/asr?encode=true&task=transcribe&output=json&language=en`, {
+        method: 'POST',
+        body: formData,
+      });
+      expect(whisperRes.status).toBe(200);
+      const transcript = await whisperRes.json() as any;
+      const text = (transcript.text ?? '').toLowerCase();
+      expect(text).toContain('rome');
+    });
+
+    // ─── Verify MQTT events from Kokoro pipeline ──────────────
+
+    it('aliceChatProcessEvents contains Message, SttJob, ChatCompletionJob, and TtsJob events', async () => {
+      // Wait for any remaining events to arrive
+      await waitForEvents<ProcessEvent>(aliceChatProcessEvents, 6, 10000);
+      const events = groupByResourceName(aliceChatProcessEvents);
+
+      // USER audio message created
+      const messages = events.Message || [];
+      expect(messages.length).toBeGreaterThanOrEqual(2); // active+completed for user, active+completed for assistant
+
+      // STT job processed the audio
+      const sttJobs = events.SttJob || [];
+      expect(sttJobs.length).toBeGreaterThanOrEqual(2); // active+completed
+
+      // Chat completion ran after STT
+      const ccJobs = events.ChatCompletionJob || [];
+      expect(ccJobs.length).toBeGreaterThanOrEqual(2); // active+completed
+
+      // TTS generated audio for assistant response
+      const ttsJobs = events.TtsJob || [];
+      expect(ttsJobs.length).toBeGreaterThanOrEqual(2); // active+completed
+
+      aliceChatProcessEvents = [];
+    });
+
+    // ─── MQTT cleanup ─────────────────────────────────────────
+
+    it('close alice MQTT client for messages', () => {
+      aliceMqttClient?.end();
     });
   });
 }

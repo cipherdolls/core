@@ -3,6 +3,16 @@ import { Elysia, t } from 'elysia';
 import { prisma } from '../db';
 import { jwtGuard } from '../auth/jwt';
 import { enqueueCreated, enqueueDeleted } from '../queue/enqueue';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import * as crypto from 'node:crypto';
+
+const ASSETS_PATH = process.env.ASSETS_PATH ?? '/app/uploads';
+const MESSAGES_DIR = path.join(ASSETS_PATH, 'messages');
+
+function ensureDir(dir: string) {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
 
 export const messagesRoutes = new Elysia({ prefix: '/messages' })
 
@@ -58,9 +68,27 @@ export const messagesRoutes = new Elysia({ prefix: '/messages' })
       include: { chat: true, chatCompletionJob: true, ttsJob: true, embeddingJob: true },
     });
     if (!item) { set.status = 404; return { error: 'Not found' }; }
-    // No ownership check on findOne — matches backend behavior
+    if (item.chat.userId !== user.userId && user.role !== 'ADMIN') { set.status = 403; return { error: 'Not authorized' }; }
     const { chat: _, ...message } = item;
     return message;
+  })
+
+  /* ── GET /messages/:id/audio ─────────────────────────────────── */
+  .get('/:id/audio', async ({ user, params, set }) => {
+    const item = await prisma.message.findUnique({ where: { id: params.id }, include: { chat: true } });
+    if (!item || !item.fileName) { set.status = 404; return { error: 'Audio not found' }; }
+    if (item.chat.userId !== user.userId && user.role !== 'ADMIN') { set.status = 403; return { error: 'Not authorized' }; }
+
+    const filePath = path.join(MESSAGES_DIR, item.fileName);
+    if (!fs.existsSync(filePath)) { set.status = 404; return { error: 'Audio file not found' }; }
+
+    const fileBuffer = fs.readFileSync(filePath);
+    return new Response(fileBuffer, {
+      headers: {
+        'Content-Type': 'audio/mpeg',
+        'Content-Disposition': 'attachment; filename=audio.mp3',
+      },
+    });
   })
 
   /* ── POST /messages ──────────────────────────────────────────── */
@@ -76,7 +104,16 @@ export const messagesRoutes = new Elysia({ prefix: '/messages' })
 
     if (body.content) data.content = body.content;
 
-    if (body.fileName) {
+    // Handle file upload
+    if (body.file && body.file.size > 0) {
+      ensureDir(MESSAGES_DIR);
+      const randomName = crypto.randomBytes(16).toString('hex');
+      const ext = body.file.name?.split('.').pop() ?? 'mp3';
+      const fileName = `${randomName}.${ext}`;
+      const buffer = Buffer.from(await body.file.arrayBuffer());
+      fs.writeFileSync(path.join(MESSAGES_DIR, fileName), buffer);
+      data.fileName = fileName;
+    } else if (body.fileName) {
       data.fileName = body.fileName;
     }
 
@@ -88,6 +125,7 @@ export const messagesRoutes = new Elysia({ prefix: '/messages' })
       chatId: t.String(),
       content: t.Optional(t.String()),
       fileName: t.Optional(t.String()),
+      file: t.Optional(t.File()),
     }),
   })
 

@@ -31,4 +31,6 @@ export { ttsJobsProcessor } from '../ttsJobs/processor';
 export { sponsorshipsProcessor } from '../sponsorships/processor';
 export { tokenPermitsProcessor } from '../tokenPermits/processor';
 export { embeddingJobsProcessor } from '../embeddingJobs/processor';
+export { sttJobsProcessor } from '../sttJobs/processor';
+export { fillerWordsProcessor } from '../fillerWords/processor';
 export const firmwaresProcessor = new StubProcessor('firmware');

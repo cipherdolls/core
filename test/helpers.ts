@@ -1,10 +1,53 @@
 import { ethers } from 'ethers';
+import IORedis from 'ioredis';
 import mqtt from 'mqtt';
 import type { MqttClient } from 'mqtt';
 export type { MqttClient };
 
 export const BASE_URL = process.env.BASE_URL ?? 'http://localhost:4000';
 export const MQTT_URL = process.env.MQTT_BROKER_URL ?? 'mqtt://core:1883';
+const REDIS_HOST = process.env.REDIS_HOST ?? 'localhost';
+const REDIS_PORT = parseInt(process.env.REDIS_PORT ?? '6379');
+
+/**
+ * Wait until all BullMQ queues in Redis are empty (no waiting, active, or delayed jobs)
+ * AND stay empty for `settleMs` to avoid false positives when one job completes
+ * and immediately enqueues the next (e.g. STT → chatCompletion).
+ */
+export async function waitForQueuesEmpty(timeout = 30000, settleMs = 1000): Promise<void> {
+  const redis = new IORedis(REDIS_PORT, REDIS_HOST, { maxRetriesPerRequest: null });
+  const interval = 200;
+  let elapsed = 0;
+  let emptyFor = 0;
+
+  try {
+    while (elapsed < timeout) {
+      const keys = await redis.keys('bull:*:waiting');
+      const activeKeys = await redis.keys('bull:*:active');
+      const delayedKeys = await redis.keys('bull:*:delayed');
+
+      let totalJobs = 0;
+      for (const key of [...keys, ...activeKeys, ...delayedKeys]) {
+        const type = await redis.type(key);
+        if (type === 'list') totalJobs += await redis.llen(key);
+        else if (type === 'zset') totalJobs += await redis.zcard(key);
+      }
+
+      if (totalJobs === 0) {
+        emptyFor += interval;
+        if (emptyFor >= settleMs) return;
+      } else {
+        emptyFor = 0;
+      }
+
+      await new Promise((r) => setTimeout(r, interval));
+      elapsed += interval;
+    }
+    throw new Error(`Queues not empty after ${timeout}ms`);
+  } finally {
+    redis.disconnect();
+  }
+}
 
 // Anvil deterministic wallets
 export const wallets = {

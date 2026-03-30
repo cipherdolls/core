@@ -7,7 +7,7 @@ const USDC_WHALE = '0x20FE51A9229EEf2cF8Ad9E89d91CAb9312cF3b7A';
 let snapshotId: string | null = null;
 
 async function resetPostgres() {
-  execSync('bunx prisma db push --force-reset', { stdio: 'inherit' });
+  execSync('bunx prisma migrate reset --force --skip-generate --skip-seed', { stdio: 'inherit' });
 }
 
 async function resetRedis() {

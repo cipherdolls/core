@@ -1,5 +1,5 @@
 
-import { auth, api, get, connectMqtt, waitForEvents, groupByResourceName, type ProcessEvent, type MqttClient, BASE_URL } from './helpers';
+import { auth, api, get, connectMqtt, waitForEvents, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient, BASE_URL } from './helpers';
 
 export function describeSponsorships() {
   describe('Sponsorships', () => {
@@ -66,11 +66,11 @@ export function describeSponsorships() {
       expect(status).toBe(422);
     });
 
-    it('POST /sponsorships with nonexistent scenarioId returns 500', async () => {
+    it('POST /sponsorships with nonexistent scenarioId returns 404', async () => {
       const { status } = await api('POST', '/sponsorships', auth.alice.jwt, {
         scenarioId: '00000000-0000-0000-0000-000000000000',
       });
-      expect(status).toBe(500);
+      expect(status).toBe(404);
     });
 
     // ─── Alice creates sponsorship ───────────────────────────
@@ -252,7 +252,55 @@ export function describeSponsorships() {
       aliceSponsorshipId = body.id;
     });
 
+    // ─── Auto-remove sponsorship when tokenSpendable < 1 ─────
+
+    it('alice has a sponsorship before token drop', async () => {
+      const { body } = await api('GET', '/sponsorships', auth.alice.jwt);
+      expect(body.data.length).toBe(1);
+    });
+
+    it('admin sets alice tokenSpendable to 0.5 (below 1)', async () => {
+      aliceUserProcessEvents = [];
+      const { status } = await api('PATCH', `/users/${auth.alice.userId}`, auth.admin.jwt, {
+        tokenSpendable: 0.5,
+      });
+      expect(status).toBe(200);
+    });
+
+    it('wait for user processor to auto-remove sponsorship', async () => {
+      await waitForQueuesEmpty();
+      await new Promise((r) => setTimeout(r, 500));
+    });
+
+    it('alice sponsorship was auto-removed', async () => {
+      const { body } = await api('GET', '/sponsorships', auth.alice.jwt);
+      expect(body.data.length).toBe(0);
+    });
+
+    it('restore alice tokenSpendable', async () => {
+      const { status } = await api('PATCH', `/users/${auth.alice.userId}`, auth.admin.jwt, {
+        tokenSpendable: 3.25,
+      });
+      expect(status).toBe(200);
+      await waitForQueuesEmpty();
+      await new Promise((r) => setTimeout(r, 500));
+      aliceUserProcessEvents = [];
+    });
+
     // ─── MQTT cleanup ────────────────────────────────────────
+
+    it('consume remaining events', async () => {
+      await waitForQueuesEmpty();
+      await new Promise((r) => setTimeout(r, 500));
+      aliceUserProcessEvents = [];
+    });
+
+    it('no unprocessed events remaining', async () => {
+      await waitForQueuesEmpty();
+      await new Promise((r) => setTimeout(r, 500));
+      if (aliceUserProcessEvents.length > 0) console.log('Unprocessed alice user events:', aliceUserProcessEvents.length, aliceUserProcessEvents);
+      expect(aliceUserProcessEvents.length).toBe(0);
+    });
 
     it('close alice MQTT client for sponsorships', () => {
       aliceMqttClient?.end();

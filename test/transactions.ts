@@ -1,5 +1,5 @@
 
-import { auth, api, get, connectMqtt, waitForEvents, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
+import { auth, api, get, connectMqtt, waitForEvents, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
 import { smallTalkScenarioId, bobDeepTalkScenarioId } from './scenarios';
 import { localWhisperId } from './sttProviders';
 import { kokoroProviderId } from './ttsProviders';
@@ -524,12 +524,28 @@ export function describeTransactions() {
       expect(body.tokenSpendable).toBe(0);
     });
 
-    it('guest cannot create a hana SmallTalk chat (no tokens, no sponsorship)', async () => {
-      const { status } = await api('POST', '/chats', auth.guest.jwt, {
+    let guestHanaSmallTalkChatId: string;
+
+    it('guest CAN create a hana SmallTalk chat (free scenario + free avatar)', async () => {
+      const { status, body } = await api('POST', '/chats', auth.guest.jwt, {
         avatarId: hanaId,
         scenarioId: smallTalkScenarioIdLocal,
       });
-      expect(status).toBe(403);
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('id');
+      guestHanaSmallTalkChatId = body.id;
+    });
+
+    it('guest deletes the free SmallTalk chat', async () => {
+      const { status } = await api('DELETE', `/chats/${guestHanaSmallTalkChatId}`, auth.guest.jwt);
+      expect(status).toBe(200);
+    });
+
+    it('drain guestProcessEvents after free SmallTalk chat create+delete', async () => {
+      await waitForQueuesEmpty();
+      await new Promise((r) => setTimeout(r, 500));
+      guestUserProcessEvents = [];
+      guestChatProcessEvents = [];
     });
 
     it('guest creates a hana DeepTalk chat (sponsored by alice)', async () => {
@@ -712,14 +728,32 @@ export function describeTransactions() {
 
     // ─── MQTT cleanup ───────────────────────────────────────────
 
-    it('drain remaining MQTT events', async () => {
-      await new Promise((r) => setTimeout(r, 1000));
+    it('consume remaining events', async () => {
+      await waitForQueuesEmpty();
+      await new Promise((r) => setTimeout(r, 500));
       aliceUserProcessEvents = [];
       aliceChatProcessEvents = [];
       bobUserProcessEvents = [];
       bobChatProcessEvents = [];
       guestUserProcessEvents = [];
       guestChatProcessEvents = [];
+    });
+
+    it('no unprocessed events remaining', async () => {
+      await waitForQueuesEmpty();
+      await new Promise((r) => setTimeout(r, 500));
+      if (aliceUserProcessEvents.length > 0) console.log('Unprocessed alice user events:', aliceUserProcessEvents.length, aliceUserProcessEvents);
+      if (aliceChatProcessEvents.length > 0) console.log('Unprocessed alice chat events:', aliceChatProcessEvents.length, aliceChatProcessEvents);
+      if (bobUserProcessEvents.length > 0) console.log('Unprocessed bob user events:', bobUserProcessEvents.length, bobUserProcessEvents);
+      if (bobChatProcessEvents.length > 0) console.log('Unprocessed bob chat events:', bobChatProcessEvents.length, bobChatProcessEvents);
+      if (guestUserProcessEvents.length > 0) console.log('Unprocessed guest user events:', guestUserProcessEvents.length, guestUserProcessEvents);
+      if (guestChatProcessEvents.length > 0) console.log('Unprocessed guest chat events:', guestChatProcessEvents.length, guestChatProcessEvents);
+      expect(aliceUserProcessEvents.length).toBe(0);
+      expect(aliceChatProcessEvents.length).toBe(0);
+      expect(bobUserProcessEvents.length).toBe(0);
+      expect(bobChatProcessEvents.length).toBe(0);
+      expect(guestUserProcessEvents.length).toBe(0);
+      expect(guestChatProcessEvents.length).toBe(0);
     });
 
     it('close MQTT clients', () => {

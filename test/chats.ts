@@ -1,4 +1,4 @@
-import { auth, api, get, wallets, connectMqtt, waitForEvents, groupByResourceName, type ProcessEvent, type MqttClient, BASE_URL } from './helpers';
+import { auth, api, get, wallets, connectMqtt, waitForEvents, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient, BASE_URL } from './helpers';
 import { joiAvatarId } from './avatars';
 
 export let hanaChatId: string;
@@ -22,6 +22,15 @@ export function describeChats() {
     let bobDeepTalkScenarioId: string;
     let alienScenarioId: string;
     let sttProviderId: string; // first stt provider (for update test)
+    let paidScenarioId: string;
+    let paidChatId: string;
+    let guestSponsoredChatId: string;
+    let paidSponsorshipId: string;
+    let guestFreeChatId: string;
+    let paidTtsProviderId: string;
+    let paidTtsVoiceId: string;
+    let paidAvatarId: string;
+    let paidAvatarChatId: string;
 
     // ─── MQTT setup ─────────────────────────────────────────────
 
@@ -97,6 +106,199 @@ export function describeChats() {
       sttProviderId = sttProviders.data[0].id;
     });
 
+    // ─── Token enforcement ────────────────────────────────────────
+
+    it('guest has 0 tokenSpendable', async () => {
+      const { status, body } = await api('GET', '/users/me', auth.guest.jwt);
+      expect(status).toBe(200);
+      expect(body.tokenSpendable).toBe(0);
+    });
+
+    it('guest CAN create a chat with free scenario + free avatar', async () => {
+      const { status, body } = await api('POST', '/chats', auth.guest.jwt, {
+        avatarId: hanaId,
+        scenarioId: smallTalkScenarioId,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('id');
+      guestFreeChatId = body.id;
+    });
+
+    it('guest deletes the free chat', async () => {
+      const { status } = await api('DELETE', `/chats/${guestFreeChatId}`, auth.guest.jwt);
+      expect(status).toBe(200);
+    });
+
+    // ─── Non-free avatar with free scenario ─────────────────────
+
+    it('admin creates a paid TTS provider', async () => {
+      const { status, body } = await api('POST', '/tts-providers', auth.admin.jwt, {
+        name: 'PaidTTS', dollarPerCharacter: 0.001,
+      });
+      expect(status).toBe(200);
+      paidTtsProviderId = body.id;
+    });
+
+    it('admin creates a paid TTS voice', async () => {
+      const { status, body } = await api('POST', '/tts-voices', auth.admin.jwt, {
+        name: 'PaidVoice', providerVoiceId: 'paid-voice-1', ttsProviderId: paidTtsProviderId,
+      });
+      expect(status).toBe(200);
+      paidTtsVoiceId = body.id;
+    });
+
+    it('alice creates a paid avatar (non-free TTS voice)', async () => {
+      const { status, body } = await api('POST', '/avatars', auth.alice.jwt, {
+        name: 'PaidAvatar', shortDesc: 'Costs money', character: 'expensive', ttsVoiceId: paidTtsVoiceId, published: true,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('free', false);
+      paidAvatarId = body.id;
+    });
+
+    it('guest cannot create a chat with free scenario + paid avatar (no tokens)', async () => {
+      const { status, body } = await api('POST', '/chats', auth.guest.jwt, {
+        avatarId: paidAvatarId,
+        scenarioId: smallTalkScenarioId,
+      });
+      expect(status).toBe(403);
+      expect(body.error).toContain('Insufficient');
+    });
+
+    it('alice can create a chat with free scenario + paid avatar (has tokens)', async () => {
+      const { status, body } = await api('POST', '/chats', auth.alice.jwt, {
+        avatarId: paidAvatarId,
+        scenarioId: smallTalkScenarioId,
+        tts: false,
+      });
+      expect(status).toBe(200);
+      paidAvatarChatId = body.id;
+    });
+
+    it('guest cannot create a chat with paid scenario + paid avatar', async () => {
+      // Recreate paid scenario and avatar for this test
+      const { body: chatModels } = await api('GET', '/chat-models', auth.admin.jwt);
+      const { body: paidScen } = await api('POST', '/scenarios', auth.admin.jwt, {
+        name: 'Paid Combo Scenario', systemMessage: 'test', chatModelId: chatModels.data[0].id,
+        dollarPerMessage: 0.05, published: true,
+      });
+      const { body: paidAv } = await api('POST', '/avatars', auth.alice.jwt, {
+        name: 'PaidComboAvatar', shortDesc: 'test', character: 'test', ttsVoiceId: paidTtsVoiceId, published: true,
+      });
+      const { status } = await api('POST', '/chats', auth.guest.jwt, {
+        avatarId: paidAv.id, scenarioId: paidScen.id,
+      });
+      expect(status).toBe(403);
+      // Cleanup
+      await api('DELETE', `/avatars/${paidAv.id}`, auth.alice.jwt);
+      await api('DELETE', `/scenarios/${paidScen.id}`, auth.admin.jwt);
+    });
+
+    it('cleanup paid avatar chat', async () => {
+      await api('DELETE', `/chats/${paidAvatarChatId}`, auth.alice.jwt);
+      await api('DELETE', `/avatars/${paidAvatarId}`, auth.alice.jwt);
+      await api('DELETE', `/tts-voices/${paidTtsVoiceId}`, auth.admin.jwt);
+      await api('DELETE', `/tts-providers/${paidTtsProviderId}`, auth.admin.jwt);
+    });
+
+    // ─── Non-free scenario with free avatar ─────────────────────
+
+    it('admin creates a paid scenario (dollarPerMessage 0.05)', async () => {
+      const { body: chatModels } = await api('GET', '/chat-models', auth.admin.jwt);
+      const chatModel = chatModels.data[0];
+
+      const { status, body } = await api('POST', '/scenarios', auth.admin.jwt, {
+        name: 'Paid Scenario',
+        systemMessage: 'You are a paid assistant.',
+        chatModelId: chatModel.id,
+        dollarPerMessage: 0.05,
+        published: true,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('free', false);
+      expect(Number(body.dollarPerMessage)).toBeCloseTo(0.05);
+      paidScenarioId = body.id;
+    });
+
+    it('guest cannot create a chat with paid scenario (no tokens, no sponsorship)', async () => {
+      const { status, body } = await api('POST', '/chats', auth.guest.jwt, {
+        avatarId: hanaId,
+        scenarioId: paidScenarioId,
+      });
+      expect(status).toBe(403);
+      expect(body.error).toContain('Insufficient');
+    });
+
+    it('alice can create a chat with paid scenario (has tokens)', async () => {
+      const { status, body } = await api('POST', '/chats', auth.alice.jwt, {
+        avatarId: hanaId,
+        scenarioId: paidScenarioId,
+        tts: false,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('id');
+      paidChatId = body.id;
+    });
+
+    it('alice creates a sponsorship for the paid scenario', async () => {
+      const { status, body } = await api('POST', '/sponsorships', auth.alice.jwt, {
+        scenarioId: paidScenarioId,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('id');
+      paidSponsorshipId = body.id;
+    });
+
+    it('guest CAN create a chat with sponsored paid scenario', async () => {
+      const { status, body } = await api('POST', '/chats', auth.guest.jwt, {
+        avatarId: hanaId,
+        scenarioId: paidScenarioId,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('id');
+      guestSponsoredChatId = body.id;
+    });
+
+    it('alice deletes the sponsorship', async () => {
+      const { status } = await api('DELETE', `/sponsorships/${paidSponsorshipId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+    });
+
+    it('guest cannot create another chat after sponsorship removed', async () => {
+      const { status, body } = await api('POST', '/chats', auth.guest.jwt, {
+        avatarId: hanaId,
+        scenarioId: paidScenarioId,
+      });
+      expect(status).toBe(403);
+      expect(body.error).toContain('Insufficient');
+    });
+
+    // ─── Cleanup paid test data ─────────────────────────────────
+
+    it('admin deletes paid scenario chats', async () => {
+      if (paidChatId) {
+        const { status } = await api('DELETE', `/chats/${paidChatId}`, auth.alice.jwt);
+        expect(status).toBe(200);
+      }
+      if (guestSponsoredChatId) {
+        const { status } = await api('DELETE', `/chats/${guestSponsoredChatId}`, auth.guest.jwt);
+        expect(status).toBe(200);
+      }
+    });
+
+    it('admin deletes paid scenario', async () => {
+      const { status } = await api('DELETE', `/scenarios/${paidScenarioId}`, auth.admin.jwt);
+      expect(status).toBe(200);
+    });
+
+    it('drain events after token enforcement tests', async () => {
+      await new Promise((r) => setTimeout(r, 2000));
+      aliceUserProcessEvents = [];
+      aliceChatProcessEvents = [];
+      bobUserProcessEvents = [];
+      bobChatProcessEvents = [];
+    });
+
     // ─── Empty state ────────────────────────────────────────────
 
     it('alice get 0 chats', async () => {
@@ -151,6 +353,35 @@ export function describeChats() {
       expect(prompt).toContain('### Scenario');
     });
 
+    it('hanaChat system-prompt contains scenario systemMessage', async () => {
+      const res = await fetch(`${BASE_URL}/chats/${hanaChatId}/system-prompt`, {
+        headers: { Authorization: `Bearer ${auth.alice.jwt}` },
+      });
+      const prompt = await res.text();
+      // SmallTalk scenario has a systemMessage
+      const { body: chat } = await api('GET', `/chats/${hanaChatId}`, auth.alice.jwt);
+      const { body: scenario } = await api('GET', `/scenarios/${chat.scenarioId}`, auth.alice.jwt);
+      expect(prompt).toContain(scenario.systemMessage);
+    });
+
+    it('hanaChat system-prompt contains avatar character', async () => {
+      const res = await fetch(`${BASE_URL}/chats/${hanaChatId}/system-prompt`, {
+        headers: { Authorization: `Bearer ${auth.alice.jwt}` },
+      });
+      const prompt = await res.text();
+      const { body: chat } = await api('GET', `/chats/${hanaChatId}`, auth.alice.jwt);
+      const { body: avatar } = await api('GET', `/avatars/${chat.avatarId}`, auth.alice.jwt);
+      expect(prompt).toContain(avatar.character);
+    });
+
+    it('hanaChat system-prompt contains user name', async () => {
+      const res = await fetch(`${BASE_URL}/chats/${hanaChatId}/system-prompt`, {
+        headers: { Authorization: `Bearer ${auth.alice.jwt}` },
+      });
+      const prompt = await res.text();
+      expect(prompt).toContain('Alice');
+    });
+
     // ─── Get chat by id with includes ───────────────────────────
 
     it('get chat by id with includes', async () => {
@@ -158,6 +389,18 @@ export function describeChats() {
       expect(status).toBe(200);
       expect(body.avatar).toBeDefined();
       expect(body.scenario).toBeDefined();
+    });
+
+    it('get chat by id has nested includes', async () => {
+      const { status, body } = await api('GET', `/chats/${hanaChatId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+      expect(body.avatar).toBeDefined();
+      expect(body.scenario).toBeDefined();
+      expect(body.scenario.chatModel).toBeDefined();
+      expect(body.scenario.chatModel.aiProvider).toBeDefined();
+      expect(body._count).toBeDefined();
+      expect(typeof body._count.messages).toBe('number');
+      expect(typeof body._count.chatCompletionJobs).toBe('number');
     });
 
     // ─── Greeting message ───────────────────────────────────────
@@ -189,6 +432,32 @@ export function describeChats() {
       const { status, body } = await api('GET', '/chats', auth.alice.jwt);
       expect(status).toBe(200);
       expect(body.data.length).toBe(1);
+    });
+
+    // ─── PATCH validation ────────────────────────────────────────
+
+    it('PATCH chat with non-existent scenarioId returns 404', async () => {
+      const { status, body } = await api('PATCH', `/chats/${hanaChatId}`, auth.alice.jwt, {
+        scenarioId: '00000000-0000-0000-0000-000000000000',
+      });
+      expect(status).toBe(404);
+      expect(body.error).toContain('Scenario not found');
+    });
+
+    it('PATCH chat with non-existent avatarId returns 404', async () => {
+      const { status, body } = await api('PATCH', `/chats/${hanaChatId}`, auth.alice.jwt, {
+        avatarId: '00000000-0000-0000-0000-000000000000',
+      });
+      expect(status).toBe(404);
+      expect(body.error).toContain('Avatar not found');
+    });
+
+    it('PATCH chat with non-existent sttProviderId returns 404', async () => {
+      const { status, body } = await api('PATCH', `/chats/${hanaChatId}`, auth.alice.jwt, {
+        sttProviderId: '00000000-0000-0000-0000-000000000000',
+      });
+      expect(status).toBe(404);
+      expect(body.error).toContain('STT Provider not found');
     });
 
     // ─── Update hana chat scenario ──────────────────────────────
@@ -593,12 +862,14 @@ export function describeChats() {
       expect(body.tokenSpendable).toBe(0);
     });
 
-    it('guest can not create a chat without tokens or sponsorship (403)', async () => {
-      const { status } = await api('POST', '/chats', auth.guest.jwt, {
+    it('guest can still create a chat with free scenario + free avatar', async () => {
+      const { status, body } = await api('POST', '/chats', auth.guest.jwt, {
         avatarId: hanaId,
         scenarioId: smallTalkScenarioId,
       });
-      expect(status).toBe(403);
+      expect(status).toBe(200);
+      // Clean up immediately
+      await api('DELETE', `/chats/${body.id}`, auth.guest.jwt);
     });
 
     // ─── Alien ROLEPLAY chat ────────────────────────────────────
@@ -655,12 +926,17 @@ export function describeChats() {
 
     // ─── MQTT cleanup ───────────────────────────────────────────
 
-    it('drain remaining MQTT events', async () => {
-      await new Promise((r) => setTimeout(r, 1000));
-      aliceUserProcessEvents = [];
-      aliceChatProcessEvents = [];
-      bobUserProcessEvents = [];
-      bobChatProcessEvents = [];
+    it('no unprocessed events remaining', async () => {
+      await waitForQueuesEmpty();
+      await new Promise((r) => setTimeout(r, 500));
+      if (aliceUserProcessEvents.length > 0) console.log('Unprocessed alice user events:', aliceUserProcessEvents.length, aliceUserProcessEvents);
+      if (aliceChatProcessEvents.length > 0) console.log('Unprocessed alice chat events:', aliceChatProcessEvents.length, aliceChatProcessEvents);
+      if (bobUserProcessEvents.length > 0) console.log('Unprocessed bob user events:', bobUserProcessEvents.length, bobUserProcessEvents);
+      if (bobChatProcessEvents.length > 0) console.log('Unprocessed bob chat events:', bobChatProcessEvents.length, bobChatProcessEvents);
+      expect(aliceUserProcessEvents.length).toBe(0);
+      expect(aliceChatProcessEvents.length).toBe(0);
+      expect(bobUserProcessEvents.length).toBe(0);
+      expect(bobChatProcessEvents.length).toBe(0);
     });
 
     it('close MQTT clients', () => {

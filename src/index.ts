@@ -23,6 +23,9 @@ import { dollBodiesRoutes } from './dollBodies/routes';
 import { transactionsRoutes } from './transactions/routes';
 import { sponsorshipsRoutes } from './sponsorships/routes';
 import { tokenPermitsRoutes } from './tokenPermits/routes';
+import { chatCompletionJobsRoutes } from './chatCompletionJobs/routes';
+import { embeddingJobsRoutes } from './embeddingJobs/routes';
+import { fillerWordsRoutes } from './fillerWords/routes';
 import { firmwaresRoutes } from './firmwares/routes';
 import { picturesRoutes } from './pictures/routes';
 import { tokenRoutes } from './token/routes';
@@ -67,6 +70,9 @@ const app = new Elysia({ normalize: true })
   .use(transactionsRoutes)
   .use(sponsorshipsRoutes)
   .use(tokenPermitsRoutes)
+  .use(chatCompletionJobsRoutes)
+  .use(embeddingJobsRoutes)
+  .use(fillerWordsRoutes)
   .use(firmwaresRoutes)
   .use(picturesRoutes)
   .use(tokenRoutes)

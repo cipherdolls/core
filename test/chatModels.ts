@@ -1,5 +1,5 @@
 
-import { auth, api, get, connectMqtt, subscribeTopic, waitForEvents, groupByResourceName, type ProcessEvent, type MqttClient, MQTT_URL } from './helpers';
+import { auth, api, get, connectMqtt, subscribeTopic, waitForEvents, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient, MQTT_URL } from './helpers';
 
 // Module-level ID for cross-test imports
 export let chatModelId: string;
@@ -208,6 +208,19 @@ export function describeChatModels() {
       expect(body).toHaveProperty('data');
       expect(Array.isArray(body.data)).toBe(true);
       expect(body.data.length).toBe(1);
+    });
+
+    it('consume remaining events from chat model operations', async () => {
+      await waitForQueuesEmpty();
+      await new Promise((r) => setTimeout(r, 500));
+      adminUserProcessEvents = [];
+    });
+
+    it('no unprocessed events remaining', async () => {
+      await waitForQueuesEmpty();
+      await new Promise((r) => setTimeout(r, 500));
+      if (adminUserProcessEvents.length > 0) console.log('Unprocessed admin user events:', adminUserProcessEvents.length, adminUserProcessEvents);
+      expect(adminUserProcessEvents.length).toBe(0);
     });
 
     it('close admin MQTT client for chatModels', () => {

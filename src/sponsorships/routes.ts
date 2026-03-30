@@ -39,9 +39,12 @@ export const sponsorshipsRoutes = new Elysia({ prefix: '/sponsorships' })
         return { message: 'Insufficient spendable tokens' };
       }
 
-      // Prevent self-sponsorship
+      // Validate scenario exists
       const scenario = await prisma.scenario.findUnique({ where: { id: body.scenarioId } });
-      if (scenario && scenario.userId === user.userId) {
+      if (!scenario) { set.status = 404; return { message: 'Scenario not found' }; }
+
+      // Prevent self-sponsorship
+      if (scenario.userId === user.userId) {
         set.status = 403;
         return { message: 'Cannot sponsor your own scenario' };
       }

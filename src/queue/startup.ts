@@ -20,6 +20,8 @@ import {
   embeddingJobsProcessor,
   sponsorshipsProcessor,
   tokenPermitsProcessor,
+  sttJobsProcessor,
+  fillerWordsProcessor,
   firmwaresProcessor,
 } from './processors';
 
@@ -54,6 +56,8 @@ export function startWorkers() {
   registerWorker('embeddingJob', (job) => embeddingJobsProcessor.process(job));
   registerWorker('sponsorship', (job) => sponsorshipsProcessor.process(job));
   registerWorker('tokenPermit', (job) => tokenPermitsProcessor.process(job));
+  registerWorker('sttJob', (job) => sttJobsProcessor.process(job));
+  registerWorker('fillerWord', (job) => fillerWordsProcessor.process(job));
   registerWorker('firmware', (job) => firmwaresProcessor.process(job));
 
   console.log('All BullMQ workers registered.');

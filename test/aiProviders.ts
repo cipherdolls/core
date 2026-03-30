@@ -37,7 +37,7 @@ export function describeAiProviders() {
 
     it('post a AiProvider Ollama Chat as Admin', async () => {
       const { status, body } = await api('POST', '/ai-providers', auth.admin.jwt, {
-        name: 'Ollama Chat', apiKey: 'fakeApiKey', basePath: 'http://ollama-chat:11434/v1',
+        name: 'Ollama Chat', apiKey: 'fakeApiKey', basePath: `${process.env.OLLAMA_CHAT_URL ?? 'http://localhost:11434'}/v1`,
       });
       expect(status).toBe(200);
       expect(body).toHaveProperty('id');
@@ -48,7 +48,7 @@ export function describeAiProviders() {
 
     it('post a AiProvider Ollama Reasoning as Admin', async () => {
       const { status, body } = await api('POST', '/ai-providers', auth.admin.jwt, {
-        name: 'Ollama Reasoning', apiKey: 'fakeApiKey', basePath: 'http://ollama-reasoning:11435/v1',
+        name: 'Ollama Reasoning', apiKey: 'fakeApiKey', basePath: `${process.env.OLLAMA_REASONING_URL ?? 'http://localhost:11435'}/v1`,
       });
       expect(status).toBe(200);
       expect(body).toHaveProperty('id');
@@ -59,7 +59,7 @@ export function describeAiProviders() {
 
     it('post a AiProvider Ollama Embedding as Admin', async () => {
       const { status, body } = await api('POST', '/ai-providers', auth.admin.jwt, {
-        name: 'Ollama Embedding', apiKey: 'fakeApiKey', basePath: 'http://ollama-embedding:11436/v1',
+        name: 'Ollama Embedding', apiKey: 'fakeApiKey', basePath: `${process.env.OLLAMA_EMBEDDING_URL ?? 'http://localhost:11436'}/v1`,
       });
       expect(status).toBe(200);
       expect(body).toHaveProperty('id');
@@ -82,12 +82,11 @@ export function describeAiProviders() {
 
     it('post a AiProvider ollama as Admin', async () => {
       const { status, body } = await api('POST', '/ai-providers', auth.admin.jwt, {
-        name: 'Ollama', apiKey: 'fakeApiKey', basePath: 'http://ollama:11434/v1',
+        name: 'Ollama', apiKey: 'fakeApiKey', basePath: `${process.env.OLLAMA_URL ?? 'http://localhost:11434'}/v1`,
       });
       expect(status).toBe(200);
       expect(body).toHaveProperty('id');
       expect(body).toHaveProperty('name', 'Ollama');
-      expect(body).toHaveProperty('basePath', 'http://ollama:11434/v1');
       expect(body).not.toHaveProperty('apiKey');
       ollamaProviderId = body.id;
     });

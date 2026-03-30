@@ -94,13 +94,19 @@ export const chatsRoutes = new Elysia({ prefix: '/chats' })
     const scenario = await prisma.scenario.findUnique({ where: { id: body.scenarioId } });
     if (!scenario) { set.status = 404; return { error: 'Scenario not found' }; }
 
-    // Token balance enforcement — check sponsorships too
-    const dbUser = await prisma.user.findUnique({ where: { id: user.userId } });
-    const minimumSpendable = 0.1;
-    const hasEnoughTokens = Number(dbUser?.tokenSpendable ?? 0) >= minimumSpendable;
-    const sponsorships = await prisma.sponsorship.findMany({ where: { scenarioId: scenario.id } });
-    const hasSponsorship = sponsorships.length > 0;
-    if (!(hasEnoughTokens || hasSponsorship)) { set.status = 403; return { error: 'Insufficient tokens or sponsorship' }; }
+    // Token balance enforcement — free scenarios/avatars skip the check
+    const isFreeScenario = scenario.free;
+    const avatarWithVoice = await prisma.avatar.findUnique({ where: { id: body.avatarId }, include: { ttsVoice: { include: { ttsProvider: true } } } });
+    const isFreeAvatar = avatarWithVoice?.free;
+
+    if (!isFreeScenario || !isFreeAvatar) {
+      const dbUser = await prisma.user.findUnique({ where: { id: user.userId } });
+      const minimumSpendable = 0.1;
+      const hasEnoughTokens = Number(dbUser?.tokenSpendable ?? 0) >= minimumSpendable;
+      const sponsorships = await prisma.sponsorship.findMany({ where: { scenarioId: scenario.id } });
+      const hasSponsorship = sponsorships.length > 0;
+      if (!(hasEnoughTokens || hasSponsorship)) { set.status = 403; return { error: 'Insufficient tokens or sponsorship' }; }
+    }
 
     const chat = await prisma.chat.create({
       data: {
@@ -143,6 +149,21 @@ export const chatsRoutes = new Elysia({ prefix: '/chats' })
 
     const original = item;
     const { sttProviderId, scenarioId, avatarId, ...rest } = body;
+
+    // Validate related resources exist
+    if (avatarId) {
+      const avatar = await prisma.avatar.findUnique({ where: { id: avatarId } });
+      if (!avatar) { set.status = 404; return { error: 'Avatar not found' }; }
+    }
+    if (scenarioId) {
+      const scenario = await prisma.scenario.findUnique({ where: { id: scenarioId } });
+      if (!scenario) { set.status = 404; return { error: 'Scenario not found' }; }
+    }
+    if (sttProviderId) {
+      const sttProvider = await prisma.sttProvider.findUnique({ where: { id: sttProviderId } });
+      if (!sttProvider) { set.status = 404; return { error: 'STT Provider not found' }; }
+    }
+
     const updated = await prisma.chat.update({
       where: { id: params.id },
       data: {

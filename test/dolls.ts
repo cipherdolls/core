@@ -1,4 +1,4 @@
-import { auth, api, get, wallets, connectMqtt, waitForEvents, groupByResourceName, type ProcessEvent, type MqttClient, BASE_URL } from './helpers';
+import { auth, api, get, wallets, connectMqtt, waitForEvents, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient, BASE_URL } from './helpers';
 
 export function describeDolls() {
   describe('Dolls', () => {
@@ -662,6 +662,28 @@ export function describeDolls() {
     });
 
     // ─── MQTT cleanup ───────────────────────────────────────────
+
+    it('consume remaining events', async () => {
+      await waitForQueuesEmpty();
+      await new Promise((r) => setTimeout(r, 500));
+      aliceUserProcessEvents = [];
+      aliceDollProcessEvents = [];
+      doll1DollProcessEvents = [];
+      doll2DollProcessEvents = [];
+    });
+
+    it('no unprocessed events remaining', async () => {
+      await waitForQueuesEmpty();
+      await new Promise((r) => setTimeout(r, 500));
+      if (aliceUserProcessEvents.length > 0) console.log('Unprocessed alice user events:', aliceUserProcessEvents.length, aliceUserProcessEvents);
+      if (aliceDollProcessEvents.length > 0) console.log('Unprocessed alice doll events:', aliceDollProcessEvents.length, aliceDollProcessEvents);
+      if (doll1DollProcessEvents.length > 0) console.log('Unprocessed doll1 doll events:', doll1DollProcessEvents.length, doll1DollProcessEvents);
+      if (doll2DollProcessEvents.length > 0) console.log('Unprocessed doll2 doll events:', doll2DollProcessEvents.length, doll2DollProcessEvents);
+      expect(aliceUserProcessEvents.length).toBe(0);
+      expect(aliceDollProcessEvents.length).toBe(0);
+      expect(doll1DollProcessEvents.length).toBe(0);
+      expect(doll2DollProcessEvents.length).toBe(0);
+    });
 
     it('close MQTT clients', async () => {
       await new Promise((r) => setTimeout(r, 1000));
