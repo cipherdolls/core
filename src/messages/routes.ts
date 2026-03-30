@@ -65,7 +65,13 @@ export const messagesRoutes = new Elysia({ prefix: '/messages' })
   .get('/:id', async ({ user, params, set }) => {
     const item = await prisma.message.findUnique({
       where: { id: params.id },
-      include: { chat: true, chatCompletionJob: true, ttsJob: true, embeddingJob: true },
+      include: {
+        chat: true,
+        chatCompletionJob: { include: { chatModel: { include: { aiProvider: true } } } },
+        ttsJob: { include: { ttsVoice: { include: { ttsProvider: true } } } },
+        sttJob: { include: { sttProvider: true } },
+        embeddingJob: { include: { embeddingModel: { include: { aiProvider: true } } } },
+      },
     });
     if (!item) { set.status = 404; return { error: 'Not found' }; }
     if (item.chat.userId !== user.userId && user.role !== 'ADMIN') { set.status = 403; return { error: 'Not authorized' }; }
