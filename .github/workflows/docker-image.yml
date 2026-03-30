@@ -49,4 +49,4 @@ jobs:
           script: |
             docker login -u ${{ secrets.DOCKER_HUB_USERNAME }} -p ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
             docker stack deploy -c ~/devops/hostinger/prod-stack.yaml prod --with-registry-auth --resolve-image always
-            docker image prune -a -f
+            docker image prune -f --filter "until=24h"
