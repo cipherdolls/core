@@ -60,7 +60,7 @@ export const chatsRoutes = new Elysia({ prefix: '/chats' })
     const cacheKey = `chatSystemPrompt:${chat.id}`;
     const promptText = await redisConnection.get(cacheKey);
 
-    if (!promptText) { set.status = 404; return 'System prompt not cached yet. Send a message first.'; }
+    if (!promptText) { set.status = 404; return 'System prompt not cached yet.'; }
 
     set.headers['content-type'] = 'text/plain';
     return promptText;

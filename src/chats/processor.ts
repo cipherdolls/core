@@ -3,6 +3,7 @@ import { Prisma, type Chat } from '@prisma/client';
 import { BaseProcessor } from '../queue/processor';
 import { prisma } from '../db';
 import { enqueueUpdated } from '../queue/enqueue';
+import { buildAndCacheSystemPrompt } from './systemPrompt';
 
 const scalarFields = Object.values(Prisma.ChatScalarFieldEnum) as Prisma.ChatScalarFieldEnum[];
 
@@ -48,9 +49,11 @@ class ChatsProcessor extends BaseProcessor<Chat> {
         switch (chat.action) {
           case 'Init':
             console.log(`[chat] ${chat.id} action: Init`);
+            await buildAndCacheSystemPrompt(chat.id);
             break;
           case 'RefreshSystemPrompt':
             console.log(`[chat] ${chat.id} action: RefreshSystemPrompt`);
+            await buildAndCacheSystemPrompt(chat.id);
             break;
           case 'Nothing':
             return;
