@@ -43,6 +43,17 @@ const app = new Elysia({ normalize: true })
     credentials: true,
   }))
   .use(swagger({ path: '/api' }))
+  .onRequest(({ request, store }) => {
+    (store as any)._startTime = Date.now();
+    (store as any)._method = request.method;
+    (store as any)._url = new URL(request.url).pathname;
+  })
+  .onAfterResponse(({ store, set }) => {
+    const s = store as any;
+    const ms = Date.now() - (s._startTime ?? Date.now());
+    const status = typeof set.status === 'number' ? set.status : 200;
+    console.log(`${s._method} ${s._url} ${status} ${ms}ms`);
+  })
   .onError(({ error, set }) => {
     const status = (set.status as number) ?? 500;
     const message = 'message' in error ? (error as any).message : '';
