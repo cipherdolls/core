@@ -47,6 +47,20 @@ export const usersRoutes = new Elysia({ prefix: '/users' })
     return formatUser(dbUser);
   })
 
+  /* ── GET /users/:id ──────────────────────────────────────────── */
+  .get('/:id', async ({ user, params, set }) => {
+    const target = await prisma.user.findUnique({
+      where: { id: params.id },
+      select: userSelect,
+    });
+    if (!target) { set.status = 404; return { error: 'User not found' }; }
+    if (target.id !== user.userId && user.role !== 'ADMIN') {
+      set.status = 403;
+      return { error: 'Not authorized' };
+    }
+    return formatUser(target);
+  })
+
   /* ── PATCH /users/:id ────────────────────────────────────────── */
   .patch(
     '/:id',
