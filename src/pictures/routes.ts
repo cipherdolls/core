@@ -6,8 +6,56 @@ import { savePicture, servePicture } from './pictures';
 
 export const picturesRoutes = new Elysia({ prefix: '/pictures' })
 
-  /* ── POST /pictures ── upload a picture attached to an entity ──── */
+  /* ── GET /pictures/:id/picture.webp ──────────────────────────── */
+  .get('/:id/picture.webp', async ({ params, query }) => {
+    const x = parseInt(query.x ?? '100');
+    const y = parseInt(query.y ?? '100');
+
+    const item = await prisma.picture.findUnique({ where: { id: params.id } });
+    if (!item) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+
+    return servePicture(item.id, x, y, 'webp');
+  })
+
+  /* ── GET /pictures/:id/picture.jpg ───────────────────────────── */
+  .get('/:id/picture.jpg', async ({ params, query }) => {
+    const x = parseInt(query.x ?? '100');
+    const y = parseInt(query.y ?? '100');
+
+    const item = await prisma.picture.findUnique({ where: { id: params.id } });
+    if (!item) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+
+    return servePicture(item.id, x, y, 'jpeg');
+  })
+
+  /* ── GET /pictures/by/:entityType/:entityId/picture.webp ────── */
+  .get('/by/:entityType/:entityId/picture.webp', async ({ params, query }) => {
+    const x = parseInt(query.x ?? '100');
+    const y = parseInt(query.y ?? '100');
+
+    const entityKeyMap: Record<string, string> = {
+      'avatars': 'avatarId',
+      'dolls': 'dollId',
+      'doll-bodies': 'dollBodyId',
+      'scenarios': 'scenarioId',
+      'ai-providers': 'aiProviderId',
+      'stt-providers': 'sttProviderId',
+      'tts-providers': 'ttsProviderId',
+    };
+
+    const entityKey = entityKeyMap[params.entityType];
+    if (!entityKey) return new Response(JSON.stringify({ error: 'Invalid entity type' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+
+    const item = await prisma.picture.findFirst({ where: { [entityKey]: params.entityId } });
+    if (!item) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+
+    return servePicture(item.id, x, y, 'webp');
+  })
+
+  /* ── Protected routes (POST, DELETE) ────────────────────────── */
   .use(jwtGuard)
+
+  /* ── POST /pictures ── upload a picture attached to an entity ──── */
   .post('/', async ({ user, body, set }) => {
     if (!body.file || body.file.size === 0) {
       set.status = 400;
@@ -58,50 +106,4 @@ export const picturesRoutes = new Elysia({ prefix: '/pictures' })
     const item = await prisma.picture.findUnique({ where: { id: params.id } });
     if (!item) { set.status = 404; return { error: 'Not found' }; }
     return prisma.picture.delete({ where: { id: params.id } });
-  })
-
-  /* ── GET /pictures/:id/picture.webp ──────────────────────────── */
-  .get('/:id/picture.webp', async ({ params, query }) => {
-    const x = parseInt(query.x ?? '100');
-    const y = parseInt(query.y ?? '100');
-
-    const item = await prisma.picture.findUnique({ where: { id: params.id } });
-    if (!item) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
-
-    return servePicture(item.id, x, y, 'webp');
-  })
-
-  /* ── GET /pictures/:id/picture.jpg ───────────────────────────── */
-  .get('/:id/picture.jpg', async ({ params, query }) => {
-    const x = parseInt(query.x ?? '100');
-    const y = parseInt(query.y ?? '100');
-
-    const item = await prisma.picture.findUnique({ where: { id: params.id } });
-    if (!item) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
-
-    return servePicture(item.id, x, y, 'jpeg');
-  })
-
-  /* ── GET /pictures/by/:entityType/:entityId/picture.webp ────── */
-  .get('/by/:entityType/:entityId/picture.webp', async ({ params, query }) => {
-    const x = parseInt(query.x ?? '100');
-    const y = parseInt(query.y ?? '100');
-
-    const entityKeyMap: Record<string, string> = {
-      'avatars': 'avatarId',
-      'dolls': 'dollId',
-      'doll-bodies': 'dollBodyId',
-      'scenarios': 'scenarioId',
-      'ai-providers': 'aiProviderId',
-      'stt-providers': 'sttProviderId',
-      'tts-providers': 'ttsProviderId',
-    };
-
-    const entityKey = entityKeyMap[params.entityType];
-    if (!entityKey) return new Response(JSON.stringify({ error: 'Invalid entity type' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-
-    const item = await prisma.picture.findFirst({ where: { [entityKey]: params.entityId } });
-    if (!item) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
-
-    return servePicture(item.id, x, y, 'webp');
   });
