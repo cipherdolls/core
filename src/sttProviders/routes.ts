@@ -26,7 +26,7 @@ export const sttProvidersRoutes = new Elysia({ prefix: '/stt-providers' })
   })
 
   .get('/:id', async ({ params, set }) => {
-    const item = await prisma.sttProvider.findUnique({ where: { id: params.id } });
+    const item = await prisma.sttProvider.findUnique({ where: { id: params.id }, include: { picture: true } });
     if (!item) { set.status = 404; return { error: 'Not found' }; }
     return item;
   })
