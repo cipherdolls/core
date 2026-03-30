@@ -70,6 +70,7 @@ export const scenariosRoutes = new Elysia({ prefix: '/scenarios' })
             ...(callerId ? [{ userId: callerId }] : []),
           ],
         },
+        include: { picture: true },
         orderBy: { name: 'asc' as const },
       },
     };
