@@ -36,7 +36,12 @@ import { startMqttClient, stopMqttClient } from './mqtt/client';
 const port = process.env.PORT ?? 4000;
 
 const app = new Elysia({ normalize: true })
-  .use(cors())
+  .use(cors({
+    origin: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+  }))
   .use(swagger({ path: '/api' }))
   .onError(({ error, set }) => {
     const status = (set.status as number) ?? 500;
