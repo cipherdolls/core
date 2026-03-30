@@ -10,6 +10,7 @@ const avatarInclude = {
   ttsVoice: true,
   scenarios: true,
   _count: { select: { chats: true } },
+  picture: true,
 };
 
 export const avatarsRoutes = new Elysia({ prefix: '/avatars' })

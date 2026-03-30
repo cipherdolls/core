@@ -19,7 +19,7 @@ export const ttsProvidersRoutes = new Elysia({ prefix: '/tts-providers' })
         skip,
         take,
         where,
-        include: { _count: { select: { ttsVoices: true } } },
+        include: { picture: true, _count: { select: { ttsVoices: true } } },
         orderBy: { name: 'asc' },
       }),
       prisma.ttsProvider.count({ where }),

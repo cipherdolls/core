@@ -16,7 +16,7 @@ export const dollBodiesRoutes = new Elysia({ prefix: '/doll-bodies' })
       prisma.dollBody.findMany({
         skip,
         take,
-        include: { avatar: true, _count: { select: { dolls: true } } },
+        include: { avatar: true, picture: true, _count: { select: { dolls: true } } },
         orderBy: { createdAt: 'desc' },
       }),
       prisma.dollBody.count(),

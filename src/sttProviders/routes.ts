@@ -17,6 +17,7 @@ export const sttProvidersRoutes = new Elysia({ prefix: '/stt-providers' })
         skip,
         take,
         where,
+        include: { picture: true },
         orderBy: [{ recommended: 'desc' }, { name: 'asc' }],
       }),
       prisma.sttProvider.count({ where }),

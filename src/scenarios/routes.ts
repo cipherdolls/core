@@ -10,6 +10,7 @@ const scenarioInclude = {
   chatModel: { include: { aiProvider: true } },
   embeddingModel: { include: { aiProvider: true } },
   reasoningModel: { include: { aiProvider: true } },
+  picture: true,
 };
 
 export const scenariosRoutes = new Elysia({ prefix: '/scenarios' })

@@ -19,7 +19,7 @@ export const aiProvidersRoutes = new Elysia({ prefix: '/ai-providers' })
     if (query.name) where.name = { contains: query.name, mode: 'insensitive' };
 
     const [items, total] = await prisma.$transaction([
-      prisma.aiProvider.findMany({ skip, take, where, include: { _count: { select: { chatModels: true, embeddingModels: true, reasoningModels: true } } }, orderBy: { name: 'asc' } }),
+      prisma.aiProvider.findMany({ skip, take, where, include: { picture: true, _count: { select: { chatModels: true, embeddingModels: true, reasoningModels: true } } }, orderBy: { name: 'asc' } }),
       prisma.aiProvider.count({ where }),
     ]);
     return { data: items.map(stripApiKey), meta: paginationMeta(total, pageNum, take) };

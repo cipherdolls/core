@@ -14,7 +14,7 @@ export const dollsRoutes = new Elysia({ prefix: '/dolls' })
     const where = { userId: user.userId };
 
     const [items, total] = await prisma.$transaction([
-      prisma.doll.findMany({ skip, take, where, include: { dollBody: true, chat: true }, orderBy: { createdAt: 'desc' } }),
+      prisma.doll.findMany({ skip, take, where, include: { dollBody: true, chat: true, picture: true }, orderBy: { createdAt: 'desc' } }),
       prisma.doll.count({ where }),
     ]);
     return { data: items, meta: paginationMeta(total, pageNum, take) };
@@ -24,7 +24,7 @@ export const dollsRoutes = new Elysia({ prefix: '/dolls' })
   .get('/:id', async ({ user, params, set }) => {
     const item = await prisma.doll.findUnique({
       where: { id: params.id },
-      include: { dollBody: true, chat: true },
+      include: { dollBody: true, chat: true, picture: true },
     });
     if (!item) { set.status = 404; return { error: 'Not found' }; }
     if (item.userId !== user.userId && user.role !== 'ADMIN') {
