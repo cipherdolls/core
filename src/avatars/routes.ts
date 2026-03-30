@@ -68,6 +68,7 @@ export const avatarsRoutes = new Elysia({ prefix: '/avatars' })
             ...(callerId ? [{ userId: callerId }] : []),
           ],
         },
+        include: { picture: true },
         orderBy: { name: 'asc' as const },
       },
     };
