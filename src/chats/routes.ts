@@ -4,6 +4,7 @@ import { prisma } from '../db';
 import { jwtGuard } from '../auth/jwt';
 import { parsePagination, paginationMeta } from '../helpers/pagination';
 import { enqueueCreated, enqueueUpdated, enqueueDeleted } from '../queue/enqueue';
+import { redisConnection } from '../queue/connection';
 
 const chatListInclude = {
   avatar: true,
@@ -52,36 +53,17 @@ export const chatsRoutes = new Elysia({ prefix: '/chats' })
 
   /* ── GET /chats/:id/system-prompt ──────────────────────────────── */
   .get('/:id/system-prompt', async ({ user, params, set }) => {
-    const chat = await prisma.chat.findUnique({
-      where: { id: params.id },
-      include: {
-        user: true,
-        avatar: true,
-        scenario: true,
-      },
-    });
+    const chat = await prisma.chat.findUnique({ where: { id: params.id } });
     if (!chat) { set.status = 404; return 'Not found'; }
     if (chat.userId !== user.userId && user.role !== 'ADMIN') { set.status = 404; return 'Not found'; }
 
-    const parts: string[] = [];
-    parts.push('### Introduction');
-    parts.push(chat.scenario?.systemMessage ?? '');
-    parts.push('');
-    parts.push('### Avatar Personality');
-    parts.push(chat.avatar?.character ?? '');
-    parts.push('');
-    parts.push('### User');
-    parts.push(`Name: ${chat.user?.name ?? 'User'}`);
-    if (chat.user?.gender) parts.push(`Gender: ${chat.user.gender}`);
-    if (chat.user?.language) parts.push(`Language: ${chat.user.language}`);
-    parts.push('');
-    parts.push('### Scenario');
-    parts.push(`Name: ${chat.scenario?.name ?? ''}`);
-    if (chat.scenario?.type) parts.push(`Type: ${chat.scenario.type}`);
-    if (chat.scenario?.greeting) parts.push(`Greeting: ${chat.scenario.greeting}`);
+    const cacheKey = `chatSystemPrompt:${chat.id}`;
+    const promptText = await redisConnection.get(cacheKey);
 
-    set.headers = { 'content-type': 'text/plain' };
-    return parts.join('\n');
+    if (!promptText) { set.status = 404; return 'System prompt not cached yet. Send a message first.'; }
+
+    set.headers['content-type'] = 'text/plain';
+    return promptText;
   })
 
   /* ── POST /chats ─────────────────────────────────────────────── */
