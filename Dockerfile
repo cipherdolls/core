@@ -16,6 +16,9 @@ RUN bunx prisma generate
 ARG CACHE_BUST=1
 COPY . .
 
+ARG COMMIT_SHA
+ENV COMMIT_SHA=$COMMIT_SHA
+
 EXPOSE 4000
 
 CMD ["bun", "run", "src/api.ts"]

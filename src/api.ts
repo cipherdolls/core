@@ -38,7 +38,7 @@ const app = new Elysia({ normalize: true })
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
   }))
-  .use(swagger({ path: '/api' }))
+  .use(swagger({ path: '/api', documentation: { info: { title: 'CipherDolls API', version: process.env.COMMIT_SHA ?? 'dev' } } }))
   .onRequest(({ request, store }) => {
     (store as any)._startTime = Date.now();
     (store as any)._method = request.method;
