@@ -23,8 +23,8 @@ export function startMqttClient() {
     console.log(`MQTT client connected to ${brokerUrl}`);
   });
 
-  client.on('error', () => {
-    // Suppress reconnect errors — mqtt.js auto-reconnects
+  client.on('error', (err) => {
+    console.error('[mqtt] Client error:', err.message);
   });
 }
 
