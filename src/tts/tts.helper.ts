@@ -3,6 +3,9 @@ import * as path from 'path';
 import type { TtsVoice, TtsProvider } from '@prisma/client';
 
 const KOKORO_URL = process.env.CIPHERDOLLS_KOKORO_URL ?? 'http://localhost:8880';
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY ?? '';
+const MINIMAX_API_KEY = process.env.MINIMAX_API_KEY ?? '';
+const UNREALSPEECH_API_KEY = process.env.UNREALSPEECH_API_KEY ?? '';
 const ASSETS_PATH = process.env.ASSETS_PATH ?? '/app/uploads';
 
 export interface TtsResult {
@@ -35,12 +38,12 @@ async function kokoroTts(text: string, voice: TtsVoice): Promise<Buffer> {
   return Buffer.from(await response.arrayBuffer());
 }
 
-async function elevenlabsTts(text: string, voice: TtsVoice, provider: TtsProvider): Promise<Buffer> {
+async function elevenlabsTts(text: string, voice: TtsVoice): Promise<Buffer> {
   const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice.providerVoiceId}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'xi-api-key': provider.apiKey,
+      'xi-api-key': ELEVENLABS_API_KEY,
     },
     body: JSON.stringify({
       text,
@@ -57,12 +60,12 @@ async function elevenlabsTts(text: string, voice: TtsVoice, provider: TtsProvide
   return Buffer.from(await response.arrayBuffer());
 }
 
-async function minimaxTts(text: string, voice: TtsVoice, provider: TtsProvider): Promise<Buffer> {
+async function minimaxTts(text: string, voice: TtsVoice): Promise<Buffer> {
   const response = await fetch('https://api.minimaxi.chat/v1/t2a_v2', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${provider.apiKey}`,
+      'Authorization': `Bearer ${MINIMAX_API_KEY}`,
     },
     body: JSON.stringify({
       model: 'speech-02-hd',
@@ -87,12 +90,12 @@ async function minimaxTts(text: string, voice: TtsVoice, provider: TtsProvider):
   return Buffer.from(audioHex, 'hex');
 }
 
-async function unrealSpeechTts(text: string, voice: TtsVoice, provider: TtsProvider): Promise<Buffer> {
+async function unrealSpeechTts(text: string, voice: TtsVoice): Promise<Buffer> {
   const response = await fetch('https://api.v7.unrealspeech.com/speech', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${provider.apiKey}`,
+      'Authorization': `Bearer ${UNREALSPEECH_API_KEY}`,
     },
     body: JSON.stringify({
       Text: text,
@@ -135,11 +138,11 @@ export async function tts(
     if (name.includes('kokoro')) {
       audioBuffer = await kokoroTts(text, voice);
     } else if (name.includes('elevenlabs') || name.includes('eleven')) {
-      audioBuffer = await elevenlabsTts(text, voice, provider);
+      audioBuffer = await elevenlabsTts(text, voice);
     } else if (name.includes('minimax')) {
-      audioBuffer = await minimaxTts(text, voice, provider);
+      audioBuffer = await minimaxTts(text, voice);
     } else if (name.includes('unrealspeech') || name.includes('unreal')) {
-      audioBuffer = await unrealSpeechTts(text, voice, provider);
+      audioBuffer = await unrealSpeechTts(text, voice);
     } else {
       throw new Error(`Unknown TTS provider: ${provider.name}`);
     }
