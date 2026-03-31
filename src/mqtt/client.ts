@@ -23,8 +23,10 @@ export function startMqttClient() {
     console.log(`MQTT client connected to ${brokerUrl}`);
   });
 
+  console.log(`[mqtt] Connecting to ${brokerUrl}`);
+
   client.on('error', (err) => {
-    console.error('[mqtt] Client error:', err.message);
+    console.error(`[mqtt] Client error (${brokerUrl}):`, err.message);
   });
 }
 
