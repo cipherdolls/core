@@ -23,6 +23,14 @@ export async function startBroker() {
 
   broker = new Aedes();
 
+  broker.on('client', (client: ExtendedClient) => {
+    console.log(`[mqtt] Client connected: ${client.id}`);
+  });
+
+  broker.on('clientDisconnect', (client: ExtendedClient) => {
+    console.log(`[mqtt] Client disconnected: ${client.id}`);
+  });
+
   /* ── Authentication ────────────────────────────────────────── */
   broker.authenticate = (async (client: ExtendedClient, _username: any, password: any, callback: any) => {
     const pw = password ? password.toString() : '';
