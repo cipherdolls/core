@@ -40,7 +40,7 @@ export async function chatCompletion(chat: Chat & { scenario: Scenario & { chatM
 
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(`LLM error (${response.status}): ${error}`);
+    throw new Error(`LLM error (${response.status}) from ${aiProvider.name} (${aiProvider.basePath}), model ${chatModel.providerModelName}: ${error}`);
   }
 
   const data = await response.json() as any;
