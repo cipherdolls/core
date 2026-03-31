@@ -1,9 +1,8 @@
 import { Body } from '../helpers/schema';
 import { Elysia, t } from 'elysia';
-import { prisma } from '../db';
+import { prisma, model } from '../db';
 import { jwtGuard } from '../auth/jwt';
 import { parsePagination, paginationMeta } from '../helpers/pagination';
-import { enqueueCreated, enqueueUpdated, enqueueDeleted } from '../queue/enqueue';
 
 export const dollsRoutes = new Elysia({ prefix: '/dolls' })
   .use(jwtGuard)
@@ -46,12 +45,10 @@ export const dollsRoutes = new Elysia({ prefix: '/dolls' })
         if (existing.userId === user.userId) return existing;
 
         // Different user — reassign to current user
-        const original = existing;
-        const reassigned = await prisma.doll.update({
+        const reassigned = await model.doll.update({
           where: { id: existing.id },
           data: { user: { connect: { id: user.userId } } },
-        });
-        await enqueueUpdated('doll', reassigned, original);
+        }, existing);
         return reassigned;
       }
 
@@ -92,7 +89,7 @@ export const dollsRoutes = new Elysia({ prefix: '/dolls' })
               orderBy: [{ recommended: 'desc' }, { createdAt: 'asc' }],
             });
             if (scenario) {
-              const chat = await prisma.chat.create({
+              const chat = await model.chat.create({
                 data: {
                   user: { connect: { id: user.userId } },
                   avatar: { connect: { id: dollBody.avatarId } },
@@ -100,14 +97,13 @@ export const dollsRoutes = new Elysia({ prefix: '/dolls' })
                 },
               });
               chatId = chat.id;
-              await enqueueCreated('chat', chat);
             }
           }
         }
       }
 
       // Create new
-      const created = await prisma.doll.create({
+      const created = await model.doll.create({
         data: {
           macAddress: body.macAddress,
           dollBody: { connect: { id: body.dollBodyId } },
@@ -116,7 +112,6 @@ export const dollsRoutes = new Elysia({ prefix: '/dolls' })
           user: { connect: { id: user.userId } },
         },
       });
-      await enqueueCreated('doll', created);
       return created;
     },
     {
@@ -149,15 +144,13 @@ export const dollsRoutes = new Elysia({ prefix: '/dolls' })
         }
       }
 
-      const original = item;
-      const updated = await prisma.doll.update({
+      const updated = await model.doll.update({
         where: { id: params.id },
         data: {
           ...(body.name !== undefined ? { name: body.name } : {}),
           ...(body.chatId === null ? { chat: { disconnect: true } } : body.chatId !== undefined ? { chat: { connect: { id: body.chatId } } } : {}),
         },
-      });
-      await enqueueUpdated('doll', updated, original);
+      }, item);
       return updated;
     },
     {
@@ -176,6 +169,5 @@ export const dollsRoutes = new Elysia({ prefix: '/dolls' })
       set.status = 403;
       return { error: 'Not authorized' };
     }
-    await enqueueDeleted('doll', item);
-    return prisma.doll.delete({ where: { id: params.id } });
+    return model.doll.delete({ where: { id: params.id } });
   });

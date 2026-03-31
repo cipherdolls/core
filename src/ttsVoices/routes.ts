@@ -1,9 +1,8 @@
 import { Body, pickFields } from '../helpers/schema';
 import { Elysia, t } from 'elysia';
-import { prisma } from '../db';
+import { prisma, model } from '../db';
 import { jwtGuard } from '../auth/jwt';
 import { requireAdmin } from '../helpers/admin';
-import { enqueueCreated, enqueueUpdated, enqueueDeleted } from '../queue/enqueue';
 import { parsePagination, paginationMeta } from '../helpers/pagination';
 
 export const ttsVoicesRoutes = new Elysia({ prefix: '/tts-voices' })
@@ -41,11 +40,10 @@ export const ttsVoicesRoutes = new Elysia({ prefix: '/tts-voices' })
   .post('/', async ({ user, body, set }) => {
     requireAdmin(user, set);
     const { ttsProviderId, ...rest } = body;
-    const item = await prisma.ttsVoice.create({
+    const item = await model.ttsVoice.create({
       data: { ...rest, ttsProvider: { connect: { id: ttsProviderId } } },
       include: { ttsProvider: true },
     });
-    await enqueueCreated('ttsVoice', item);
     return item;
   }, {
     body: Body({
@@ -63,12 +61,11 @@ export const ttsVoicesRoutes = new Elysia({ prefix: '/tts-voices' })
     requireAdmin(user, set);
     const original = await prisma.ttsVoice.findUnique({ where: { id: params.id } });
     if (!original) { set.status = 404; return { error: 'Not found' }; }
-    const updated = await prisma.ttsVoice.update({
+    const updated = await model.ttsVoice.update({
       where: { id: params.id },
       data: pickFields(body, ['ttsProviderId', 'name', 'providerVoiceId', 'recommended', 'preview', 'gender', 'language']),
       include: { ttsProvider: true },
-    });
-    await enqueueUpdated('ttsVoice', updated, original);
+    }, original);
     return updated;
   }, {
     body: Body({
@@ -86,7 +83,5 @@ export const ttsVoicesRoutes = new Elysia({ prefix: '/tts-voices' })
     requireAdmin(user, set);
     const item = await prisma.ttsVoice.findUnique({ where: { id: params.id } });
     if (!item) { set.status = 404; return { error: 'Not found' }; }
-    const deleted = await prisma.ttsVoice.delete({ where: { id: params.id } });
-    await enqueueDeleted('ttsVoice', deleted);
-    return deleted;
+    return model.ttsVoice.delete({ where: { id: params.id } });
   });

@@ -1,9 +1,8 @@
 import { Body } from '../helpers/schema';
 import { Elysia, t } from 'elysia';
-import { prisma } from '../db';
+import { prisma, model } from '../db';
 import { jwtGuard, optionalJwtGuard, verifyToken } from '../auth/jwt';
 import { requireAdmin } from '../helpers/admin';
-import { enqueueCreated, enqueueUpdated, enqueueDeleted } from '../queue/enqueue';
 import { parsePagination, paginationMeta } from '../helpers/pagination';
 
 const scenarioInclude = {
@@ -99,7 +98,7 @@ export const scenariosRoutes = new Elysia({ prefix: '/scenarios' })
     const { chatModelId, embeddingModelId, reasoningModelId, ...rest } = body;
     // Auto-compute free flag based on dollarPerMessage
     const free = (rest.dollarPerMessage === undefined || rest.dollarPerMessage === 0) ? true : false;
-    const item = await prisma.scenario.create({
+    const item = await model.scenario.create({
       data: {
         ...rest,
         free,
@@ -110,7 +109,6 @@ export const scenariosRoutes = new Elysia({ prefix: '/scenarios' })
       },
       include: scenarioInclude,
     });
-    await enqueueCreated('scenario', item);
     return item;
   }, {
     body: Body({
@@ -138,13 +136,12 @@ export const scenariosRoutes = new Elysia({ prefix: '/scenarios' })
     if (!item) { set.status = 404; return { error: 'Not found' }; }
     if (item.userId !== user.userId && user.role !== 'ADMIN') { set.status = 403; return { error: 'Not authorized' }; }
 
-    const original = item;
     const { chatModelId, embeddingModelId, reasoningModelId, ...rest } = body;
     // Auto-compute free flag when dollarPerMessage changes
     if (body.dollarPerMessage !== undefined) {
       (rest as any).free = body.dollarPerMessage === 0;
     }
-    const updated = await prisma.scenario.update({
+    const updated = await model.scenario.update({
       where: { id: params.id },
       data: {
         ...rest,
@@ -153,8 +150,7 @@ export const scenariosRoutes = new Elysia({ prefix: '/scenarios' })
         ...(reasoningModelId ? { reasoningModel: { connect: { id: reasoningModelId } } } : reasoningModelId === null ? { reasoningModel: { disconnect: true } } : {}),
       },
       include: scenarioInclude,
-    });
-    await enqueueUpdated('scenario', updated, original);
+    }, item);
     return updated;
   }, {
     body: Body({
@@ -185,7 +181,5 @@ export const scenariosRoutes = new Elysia({ prefix: '/scenarios' })
     if (item.userId !== user.userId && user.role !== 'ADMIN') { set.status = 403; return { error: 'Not authorized' }; }
     // Published scenarios cannot be deleted by owner (only admin)
     if (item.published && user.role !== 'ADMIN') { set.status = 403; return { error: 'Cannot delete a published scenario' }; }
-    const deleted = await prisma.scenario.delete({ where: { id: params.id } });
-    await enqueueDeleted('scenario', deleted);
-    return deleted;
+    return model.scenario.delete({ where: { id: params.id } });
   });

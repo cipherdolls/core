@@ -1,9 +1,8 @@
 import { Body, pickFields } from '../helpers/schema';
 import { Elysia, t } from 'elysia';
-import { prisma } from '../db';
+import { prisma, model } from '../db';
 import { jwtGuard, optionalJwtGuard } from '../auth/jwt';
 import { requireAdmin } from '../helpers/admin';
-import { enqueueCreated, enqueueUpdated } from '../queue/enqueue';
 import { parsePagination, paginationMeta } from '../helpers/pagination';
 
 export const reasoningModelsRoutes = new Elysia({ prefix: '/reasoning-models' })
@@ -41,11 +40,10 @@ export const reasoningModelsRoutes = new Elysia({ prefix: '/reasoning-models' })
   .post('/', async ({ user, body, set }) => {
     requireAdmin(user, set);
     const { aiProviderId, ...rest } = body;
-    const item = await prisma.reasoningModel.create({
+    const item = await model.reasoningModel.create({
       data: { ...rest, aiProvider: { connect: { id: aiProviderId } } },
       include: { aiProvider: true },
     });
-    await enqueueCreated('reasoningModel', item);
     return item;
   }, {
     body: Body({
@@ -65,13 +63,11 @@ export const reasoningModelsRoutes = new Elysia({ prefix: '/reasoning-models' })
     requireAdmin(user, set);
     const item = await prisma.reasoningModel.findUnique({ where: { id: params.id } });
     if (!item) { set.status = 404; return { error: 'Not found' }; }
-    const original = item;
-    const updated = await prisma.reasoningModel.update({
+    const updated = await model.reasoningModel.update({
       where: { id: params.id },
       data: pickFields(body, ['aiProviderId', 'providerModelName', 'info', 'dollarPerInputToken', 'dollarPerOutputToken', 'contextWindow', 'recommended', 'censored', 'error']),
       include: { aiProvider: true },
-    });
-    await enqueueUpdated('reasoningModel', updated, original);
+    }, item);
     return updated;
   }, {
     body: Body({

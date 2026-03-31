@@ -3,7 +3,7 @@ import type { FillerWord } from '@prisma/client';
 import * as path from 'path';
 import * as fs from 'node:fs';
 import { BaseProcessor } from '../queue/processor';
-import { prisma } from '../db';
+import { prisma, model } from '../db';
 import { tts } from '../tts/tts.helper';
 
 const ASSETS_PATH = process.env.ASSETS_PATH ?? '/app/uploads';
@@ -62,15 +62,10 @@ class FillerWordsProcessor extends BaseProcessor<FillerWord> {
 
     const result = await tts(fillerWord.text, ttsVoice, ttsProvider, FILLER_WORDS_DIR);
 
-    const original = await prisma.fillerWord.findUnique({ where: { id: fillerWord.id } });
-    const updated = await prisma.fillerWord.update({
+    await model.fillerWord.update({
       where: { id: fillerWord.id },
       data: { fileName: result.fileName },
     });
-
-    // Enqueue the fileName update so MQTT events fire
-    const { enqueueUpdated } = await import('../queue/enqueue');
-    await enqueueUpdated('fillerWord', updated, original);
   }
 }
 

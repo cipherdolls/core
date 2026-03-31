@@ -1,5 +1,20 @@
 import { getQueue } from './registry';
 
+/** Convert BigInt fields to strings for JSON serialization (BullMQ uses JSON.stringify) */
+function serializeBigInts(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj === 'bigint') return obj.toString();
+  if (Array.isArray(obj)) return obj.map(serializeBigInts);
+  if (typeof obj === 'object' && !(obj instanceof Date)) {
+    const result: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      result[key] = serializeBigInts(value);
+    }
+    return result;
+  }
+  return obj;
+}
+
 /**
  * Creates a CUD service for a domain entity.
  *
@@ -24,20 +39,22 @@ export function createCudService<T>(
   return {
     async create(args: any): Promise<T> {
       const entity = await prismaDelegate.create(args);
-      await queue.add('created', { [queueName]: entity });
+      await queue.add('created', { [queueName]: serializeBigInts(entity) });
       return entity;
     },
 
-    async update(args: { where: any; data: any; include?: any }): Promise<T> {
-      const original = await prismaDelegate.findUnique({ where: args.where });
+    async update(args: { where: any; data: any; include?: any }, original?: T): Promise<T> {
+      if (!original) {
+        original = (await prismaDelegate.findUnique({ where: args.where })) as T;
+      }
       const entity = await prismaDelegate.update(args);
-      await queue.add('updated', { [queueName]: entity, original });
+      await queue.add('updated', { [queueName]: serializeBigInts(entity), original: serializeBigInts(original) });
       return entity;
     },
 
     async delete(args: { where: any }): Promise<T> {
       const entity = await prismaDelegate.findUnique({ where: args.where });
-      await queue.add('deleted', { [queueName]: entity });
+      await queue.add('deleted', { [queueName]: serializeBigInts(entity) });
       return prismaDelegate.delete(args);
     },
   };

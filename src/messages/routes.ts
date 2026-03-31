@@ -1,8 +1,7 @@
 import { Body } from '../helpers/schema';
 import { Elysia, t } from 'elysia';
-import { prisma } from '../db';
+import { prisma, model } from '../db';
 import { jwtGuard } from '../auth/jwt';
-import { enqueueCreated, enqueueDeleted } from '../queue/enqueue';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
@@ -123,8 +122,7 @@ export const messagesRoutes = new Elysia({ prefix: '/messages' })
       data.fileName = body.fileName;
     }
 
-    const message = await prisma.message.create({ data });
-    await enqueueCreated('message', message);
+    const message = await model.message.create({ data });
     return message;
   }, {
     body: Body({
@@ -154,6 +152,5 @@ export const messagesRoutes = new Elysia({ prefix: '/messages' })
     if (!item) { set.status = 404; return { error: 'Not found' }; }
     if (item.chat.userId !== user.userId && user.role !== 'ADMIN') { set.status = 403; return { error: 'Not authorized' }; }
 
-    await enqueueDeleted('message', item);
-    return prisma.message.delete({ where: { id: params.id } });
+    return model.message.delete({ where: { id: params.id } });
   });

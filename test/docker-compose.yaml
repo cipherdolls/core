@@ -33,7 +33,7 @@ services:
   prisma:
     build:
       context: ../../core
-    command: ["sh", "-c", "bunx prisma migrate reset --force && bunx prisma studio"]
+    command: ["sh", "-c", "bunx prisma migrate reset --force --skip-seed && bunx prisma studio"]
     stop_signal: SIGKILL
     env_file: [.env]
     environment:

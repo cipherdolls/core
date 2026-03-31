@@ -1,9 +1,8 @@
 import { Body, pickFields } from '../helpers/schema';
 import { Elysia, t } from 'elysia';
-import { prisma } from '../db';
+import { prisma, model } from '../db';
 import { jwtGuard, optionalJwtGuard } from '../auth/jwt';
 import { requireAdmin } from '../helpers/admin';
-import { enqueueCreated, enqueueUpdated, enqueueDeleted } from '../queue/enqueue';
 import { parsePagination, paginationMeta } from '../helpers/pagination';
 
 export const ttsProvidersRoutes = new Elysia({ prefix: '/tts-providers' })
@@ -39,11 +38,10 @@ export const ttsProvidersRoutes = new Elysia({ prefix: '/tts-providers' })
   .use(jwtGuard)
   .post('/', async ({ user, body, set }) => {
     requireAdmin(user, set);
-    const item = await prisma.ttsProvider.create({
+    const item = await model.ttsProvider.create({
       data: { ...body, user: { connect: { id: user.userId } } },
       include: { _count: { select: { ttsVoices: true } } },
     });
-    await enqueueCreated('ttsProvider', item);
     return item;
   }, {
     body: Body({
@@ -57,12 +55,11 @@ export const ttsProvidersRoutes = new Elysia({ prefix: '/tts-providers' })
     requireAdmin(user, set);
     const original = await prisma.ttsProvider.findUnique({ where: { id: params.id } });
     if (!original) { set.status = 404; return { error: 'Not found' }; }
-    const updated = await prisma.ttsProvider.update({
+    const updated = await model.ttsProvider.update({
       where: { id: params.id },
       data: pickFields(body, ['name', 'dollarPerCharacter', 'censored']),
       include: { _count: { select: { ttsVoices: true } } },
-    });
-    await enqueueUpdated('ttsProvider', updated, original);
+    }, original);
     return updated;
   }, {
     body: Body({
@@ -76,7 +73,5 @@ export const ttsProvidersRoutes = new Elysia({ prefix: '/tts-providers' })
     requireAdmin(user, set);
     const item = await prisma.ttsProvider.findUnique({ where: { id: params.id } });
     if (!item) { set.status = 404; return { error: 'Not found' }; }
-    const deleted = await prisma.ttsProvider.delete({ where: { id: params.id } });
-    await enqueueDeleted('ttsProvider', deleted);
-    return deleted;
+    return model.ttsProvider.delete({ where: { id: params.id } });
   });

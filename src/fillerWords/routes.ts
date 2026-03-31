@@ -1,9 +1,8 @@
 import { Body } from '../helpers/schema';
 import { Elysia, t } from 'elysia';
-import { prisma } from '../db';
+import { prisma, model } from '../db';
 import { jwtGuard } from '../auth/jwt';
 import { parsePagination, paginationMeta } from '../helpers/pagination';
-import { enqueueCreated, enqueueUpdated, enqueueDeleted } from '../queue/enqueue';
 
 export const fillerWordsRoutes = new Elysia({ prefix: '/filler-words' })
   .use(jwtGuard)
@@ -34,13 +33,12 @@ export const fillerWordsRoutes = new Elysia({ prefix: '/filler-words' })
     if (!avatar) { set.status = 404; return { error: 'Avatar not found' }; }
     if (avatar.userId !== user.userId) { set.status = 403; return { error: 'Not authorized' }; }
 
-    const item = await prisma.fillerWord.create({
+    const item = await model.fillerWord.create({
       data: {
         text: body.text,
         avatar: { connect: { id: body.avatarId } },
       },
     });
-    await enqueueCreated('fillerWord', item);
     return item;
   }, {
     body: Body({
@@ -56,12 +54,10 @@ export const fillerWordsRoutes = new Elysia({ prefix: '/filler-words' })
     const avatar = await prisma.avatar.findUnique({ where: { id: item.avatarId } });
     if (avatar!.userId !== user.userId) { set.status = 403; return { error: 'Not authorized' }; }
 
-    const original = item;
-    const updated = await prisma.fillerWord.update({
+    const updated = await model.fillerWord.update({
       where: { id: params.id },
       data: { text: body.text },
-    });
-    await enqueueUpdated('fillerWord', updated, original);
+    }, item);
     return updated;
   }, {
     body: Body({
@@ -76,7 +72,5 @@ export const fillerWordsRoutes = new Elysia({ prefix: '/filler-words' })
     const avatar = await prisma.avatar.findUnique({ where: { id: item.avatarId } });
     if (avatar!.userId !== user.userId) { set.status = 403; return { error: 'Not authorized' }; }
 
-    const deleted = await prisma.fillerWord.delete({ where: { id: params.id } });
-    await enqueueDeleted('fillerWord', deleted);
-    return deleted;
+    return model.fillerWord.delete({ where: { id: params.id } });
   });

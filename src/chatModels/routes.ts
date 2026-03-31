@@ -1,9 +1,8 @@
 import { Body, pickFields } from '../helpers/schema';
 import { Elysia, t } from 'elysia';
-import { prisma } from '../db';
+import { prisma, model } from '../db';
 import { jwtGuard, optionalJwtGuard } from '../auth/jwt';
 import { requireAdmin } from '../helpers/admin';
-import { enqueueCreated, enqueueUpdated, enqueueDeleted } from '../queue/enqueue';
 import { parsePagination, paginationMeta } from '../helpers/pagination';
 
 export const chatModelsRoutes = new Elysia({ prefix: '/chat-models' })
@@ -44,11 +43,10 @@ export const chatModelsRoutes = new Elysia({ prefix: '/chat-models' })
   .post('/', async ({ user, body, set }) => {
     requireAdmin(user, set);
     const { aiProviderId, ...rest } = body;
-    const item = await prisma.chatModel.create({
+    const item = await model.chatModel.create({
       data: { ...rest, aiProvider: { connect: { id: aiProviderId } } },
       include: { aiProvider: true },
     });
-    await enqueueCreated('chatModel', item);
     return item;
   }, {
     body: Body({
@@ -76,13 +74,11 @@ export const chatModelsRoutes = new Elysia({ prefix: '/chat-models' })
       const outputCost = body.dollarPerOutputToken ?? Number(item.dollarPerOutputToken);
       data.free = inputCost === 0 && outputCost === 0;
     }
-    const original = item;
-    const updated = await prisma.chatModel.update({
+    const updated = await model.chatModel.update({
       where: { id: params.id },
       data,
       include: { aiProvider: true },
-    });
-    await enqueueUpdated('chatModel', updated, original);
+    }, item);
     return updated;
   }, {
     body: Body({

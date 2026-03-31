@@ -5,8 +5,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { BaseProcessor } from '../queue/processor';
-import { prisma } from '../db';
-import { enqueueCreated, enqueueUpdated } from '../queue/enqueue';
+import { prisma, model } from '../db';
 
 const ASSETS_PATH = process.env.ASSETS_PATH ?? '/app/uploads';
 const WHISPER_URL = process.env.WHISPER_URL ?? 'http://localhost:9000';
@@ -119,7 +118,7 @@ class SttJobsProcessor extends BaseProcessor<SttJob> {
 
     if (result.content === '') {
       // No speech detected - create a system message
-      const systemMsg = await prisma.message.create({
+      await model.message.create({
         data: {
           user: { connect: { id: message.userId } },
           chat: { connect: { id: message.chatId } },
@@ -128,38 +127,33 @@ class SttJobsProcessor extends BaseProcessor<SttJob> {
           completed: true,
         },
       });
-      await enqueueCreated('message', systemMsg);
     } else {
       // Update the message with transcribed content
-      await prisma.message.update({
+      await model.message.update({
         where: { id: message.id },
         data: { content: result.content, completed: true },
-      });
+      }, message);
 
       // Trigger chat completion + embedding for the transcribed text
-      const ccJob = await prisma.chatCompletionJob.create({
+      await model.chatCompletionJob.create({
         data: {
           chat: { connect: { id: message.chatId } },
           message: { connect: { id: message.id } },
         },
       });
-      await enqueueCreated('chatCompletionJob', ccJob);
 
-      const embeddingJob = await prisma.embeddingJob.create({
+      await model.embeddingJob.create({
         data: {
           message: { connect: { id: message.id } },
         },
       });
-      await enqueueCreated('embeddingJob', embeddingJob);
     }
 
     // Update STT job with metrics
-    const original = await prisma.sttJob.findUnique({ where: { id: sttJob.id } });
-    const updated = await prisma.sttJob.update({
+    await model.sttJob.update({
       where: { id: sttJob.id },
       data: { timeTakenMs, audioSeconds: result.audioSeconds, usdCost: result.usdCost },
-    });
-    await enqueueUpdated('sttJob', updated, original);
+    }, sttJob);
   }
 
   protected override getFieldHandlers(_job: Job, _entity: SttJob): Record<string, () => Promise<void>> {

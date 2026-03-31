@@ -1,8 +1,7 @@
 import type { Job } from 'bullmq';
 import { Prisma, type Chat } from '@prisma/client';
 import { BaseProcessor } from '../queue/processor';
-import { prisma } from '../db';
-import { enqueueUpdated } from '../queue/enqueue';
+import { prisma, model } from '../db';
 import { buildAndCacheSystemPrompt } from './systemPrompt';
 
 const scalarFields = Object.values(Prisma.ChatScalarFieldEnum) as Prisma.ChatScalarFieldEnum[];
@@ -35,11 +34,10 @@ class ChatsProcessor extends BaseProcessor<Chat> {
     }
 
     if (sttProvider) {
-      const updated = await prisma.chat.update({
+      await model.chat.update({
         where: { id: chat.id },
         data: { sttProvider: { connect: { id: sttProvider.id } } },
-      });
-      await enqueueUpdated('chat', updated, chat);
+      }, chat);
     }
   }
 

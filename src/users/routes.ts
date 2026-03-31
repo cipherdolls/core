@@ -1,8 +1,7 @@
 import { Body } from '../helpers/schema';
 import { Elysia, t } from 'elysia';
-import { prisma } from '../db';
+import { prisma, model } from '../db';
 import { jwtGuard } from '../auth/jwt';
-import { enqueueUpdated } from '../queue/enqueue';
 
 const userSelect = {
   id: true,
@@ -75,7 +74,7 @@ export const usersRoutes = new Elysia({ prefix: '/users' })
         return { error: 'Not authorized' };
       }
 
-      const updated = await prisma.user.update({
+      const updated = await model.user.update({
         where: { id: params.id },
         data: {
           ...(body.name !== undefined ? { name: body.name } : {}),
@@ -87,8 +86,7 @@ export const usersRoutes = new Elysia({ prefix: '/users' })
           ...(body.tokenAllowance !== undefined ? { tokenAllowance: body.tokenAllowance } : {}),
           ...(body.tokenSpendable !== undefined ? { tokenSpendable: body.tokenSpendable } : {}),
         },
-      });
-      await enqueueUpdated('user', updated, target);
+      }, target);
       const result = await prisma.user.findUnique({ where: { id: params.id }, select: userSelect });
       return formatUser(result);
     },

@@ -1,10 +1,9 @@
 import { Body } from '../helpers/schema';
 import { Elysia, t } from 'elysia';
-import { prisma } from '../db';
+import { prisma, model } from '../db';
 import { jwtGuard, optionalJwtGuard, verifyToken } from '../auth/jwt';
 import { requireAdmin } from '../helpers/admin';
 import { parsePagination, paginationMeta } from '../helpers/pagination';
-import { enqueueCreated, enqueueUpdated, enqueueDeleted } from '../queue/enqueue';
 
 const avatarInclude = {
   ttsVoice: true,
@@ -110,7 +109,7 @@ export const avatarsRoutes = new Elysia({ prefix: '/avatars' })
     const ttsVoice = await prisma.ttsVoice.findUnique({ where: { id: ttsVoiceId }, include: { ttsProvider: true } });
     const free = ttsVoice ? Number(ttsVoice.ttsProvider.dollarPerCharacter) === 0 : false;
 
-    const item = await prisma.avatar.create({
+    const item = await model.avatar.create({
       data: {
         ...rest,
         free,
@@ -122,7 +121,6 @@ export const avatarsRoutes = new Elysia({ prefix: '/avatars' })
       },
       include: avatarInclude,
     });
-    await enqueueCreated('avatar', item);
     return item;
   }, {
     body: Body({
@@ -163,8 +161,7 @@ export const avatarsRoutes = new Elysia({ prefix: '/avatars' })
       }
     }
 
-    const original = item;
-    const updated = await prisma.avatar.update({
+    const updated = await model.avatar.update({
       where: { id: params.id },
       data: {
         ...rest,
@@ -174,8 +171,7 @@ export const avatarsRoutes = new Elysia({ prefix: '/avatars' })
         ...(scenarioIds ? { scenarios: { set: scenarioIds.map((id: string) => ({ id })) } } : {}),
       },
       include: avatarInclude,
-    });
-    await enqueueUpdated('avatar', updated, original);
+    }, item);
     return updated;
   }, {
     body: Body({
@@ -196,7 +192,5 @@ export const avatarsRoutes = new Elysia({ prefix: '/avatars' })
     const item = await prisma.avatar.findUnique({ where: { id: params.id } });
     if (!item) { set.status = 404; return { error: 'Not found' }; }
     if (item.userId !== user.userId && user.role !== 'ADMIN') { set.status = 403; return { error: 'Not authorized' }; }
-    const deleted = await prisma.avatar.delete({ where: { id: params.id } });
-    await enqueueDeleted('avatar', deleted);
-    return deleted;
+    return model.avatar.delete({ where: { id: params.id } });
   });

@@ -3,9 +3,8 @@ import { Prisma, type ChatCompletionJob } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { ethers } from 'ethers';
 import { BaseProcessor } from '../queue/processor';
-import { prisma } from '../db';
+import { prisma, model } from '../db';
 import { chatCompletion } from '../llm/completion';
-import { enqueueCreated, enqueueUpdated } from '../queue/enqueue';
 
 const MASTER_WALLET_ADDRESS = process.env.MASTER_WALLET_ADDRESS!;
 
@@ -56,7 +55,7 @@ class ChatCompletionJobsProcessor extends BaseProcessor<ChatCompletionJob> {
       const usdCost = inputCost.add(outputCost);
 
       // Create ASSISTANT message
-      const assistantMessage = await prisma.message.create({
+      const assistantMessage = await model.message.create({
         data: {
           role: 'ASSISTANT',
           content: result.content,
@@ -64,11 +63,9 @@ class ChatCompletionJobsProcessor extends BaseProcessor<ChatCompletionJob> {
           user: { connect: { id: chat.userId } },
         },
       });
-      await enqueueCreated('message', assistantMessage);
 
-      // Update chatCompletionJob with metrics and enqueue (triggers usdCost field handler)
-      const original = ccJob;
-      const updated = await prisma.chatCompletionJob.update({
+      // Update chatCompletionJob with metrics (triggers usdCost field handler)
+      await model.chatCompletionJob.update({
         where: { id: ccJob.id },
         data: {
           inputTokens: result.inputTokens,
@@ -78,8 +75,7 @@ class ChatCompletionJobsProcessor extends BaseProcessor<ChatCompletionJob> {
           timeTakenMs: Date.now() - startTime,
           message: { connect: { id: assistantMessage.id } },
         },
-      });
-      await enqueueUpdated('chatCompletionJob', updated, original);
+      }, ccJob);
 
       // Create transactions if cost > 0
       await this.createTransactions(chat, assistantMessage.id, usdCost);
@@ -115,7 +111,7 @@ class ChatCompletionJobsProcessor extends BaseProcessor<ChatCompletionJob> {
 
     // ChatCompletion transaction
     if (!usdCost.eq(0) && aiProviderUser && fromAddress !== aiProviderUser.signerAddress) {
-      const tx = await prisma.transaction.create({
+      await model.transaction.create({
         data: {
           type: 'chatCompletion',
           fromAddress,
@@ -124,12 +120,11 @@ class ChatCompletionJobsProcessor extends BaseProcessor<ChatCompletionJob> {
           message: { connect: { id: messageId } },
         },
       });
-      await enqueueCreated('transaction', tx);
     }
 
     // Scenario fee transaction
     if (!scenarioFee.eq(0) && fromAddress !== MASTER_WALLET_ADDRESS) {
-      const tx = await prisma.transaction.create({
+      await model.transaction.create({
         data: {
           type: 'scenarioFee',
           fromAddress,
@@ -138,7 +133,6 @@ class ChatCompletionJobsProcessor extends BaseProcessor<ChatCompletionJob> {
           message: { connect: { id: messageId } },
         },
       });
-      await enqueueCreated('transaction', tx);
     }
   }
 }

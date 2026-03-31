@@ -1,8 +1,7 @@
 import type { Job } from 'bullmq';
 import { Prisma, type Message } from '@prisma/client';
 import { BaseProcessor } from '../queue/processor';
-import { prisma } from '../db';
-import { enqueueCreated } from '../queue/enqueue';
+import { prisma, model } from '../db';
 
 const scalarFields = Object.values(Prisma.MessageScalarFieldEnum) as Prisma.MessageScalarFieldEnum[];
 
@@ -43,13 +42,12 @@ class MessagesProcessor extends BaseProcessor<Message> {
       console.log(`[message] User audio-only message. Enqueue STT.`);
       const chat = await prisma.chat.findUnique({ where: { id: message.chatId } });
       if (chat?.sttProviderId) {
-        const sttJob = await prisma.sttJob.create({
+        await model.sttJob.create({
           data: {
             message: { connect: { id: message.id } },
             sttProvider: { connect: { id: chat.sttProviderId } },
           },
         });
-        await enqueueCreated('sttJob', sttJob);
       }
     } else if (hasText) {
       console.log(`[message] User text message. Enqueue chatCompletion + embedding.`);
@@ -67,23 +65,21 @@ class MessagesProcessor extends BaseProcessor<Message> {
       const chat = await prisma.chat.findUnique({ where: { id: message.chatId } });
       if (chat?.tts) {
         console.log(`[message] Assistant text message, TTS enabled. Enqueue TTS.`);
-        const ttsJob = await prisma.ttsJob.create({
+        await model.ttsJob.create({
           data: { message: { connect: { id: message.id } } },
         });
-        await enqueueCreated('ttsJob', ttsJob);
       }
       await this.createEmbeddingJob(message);
     }
   }
 
   private async createChatCompletionJob(message: Message): Promise<void> {
-    const ccJob = await prisma.chatCompletionJob.create({
+    await model.chatCompletionJob.create({
       data: {
         chat: { connect: { id: message.chatId } },
         message: { connect: { id: message.id } },
       },
     });
-    await enqueueCreated('chatCompletionJob', ccJob);
   }
 
   private async createEmbeddingJob(message: Message): Promise<void> {
@@ -95,10 +91,9 @@ class MessagesProcessor extends BaseProcessor<Message> {
     if (chat.scenario.type === 'ROLEPLAY') return;
 
     console.log(`[message] Enqueue embedding for message ${message.id}`);
-    const embeddingJob = await prisma.embeddingJob.create({
+    await model.embeddingJob.create({
       data: { message: { connect: { id: message.id } } },
     });
-    await enqueueCreated('embeddingJob', embeddingJob);
   }
 
   protected override getFieldHandlers(_job: Job, message: Message) {

@@ -1,9 +1,8 @@
 import { Body } from '../helpers/schema';
 import { Elysia, t } from 'elysia';
-import { prisma } from '../db';
+import { prisma, model } from '../db';
 import { jwtGuard } from '../auth/jwt';
 import { parsePagination, paginationMeta } from '../helpers/pagination';
-import { enqueueCreated, enqueueDeleted } from '../queue/enqueue';
 
 export const sponsorshipsRoutes = new Elysia({ prefix: '/sponsorships' })
   .use(jwtGuard)
@@ -58,13 +57,12 @@ export const sponsorshipsRoutes = new Elysia({ prefix: '/sponsorships' })
         return { message: 'You already sponsor this scenario' };
       }
 
-      const item = await prisma.sponsorship.create({
+      const item = await model.sponsorship.create({
         data: {
           scenario: { connect: { id: body.scenarioId } },
           user: { connect: { id: user.userId } },
         },
       });
-      await enqueueCreated('sponsorship', item);
       return item;
     },
     {
@@ -82,6 +80,5 @@ export const sponsorshipsRoutes = new Elysia({ prefix: '/sponsorships' })
       set.status = 403;
       return { error: 'Not authorized' };
     }
-    await enqueueDeleted('sponsorship', item);
-    return prisma.sponsorship.delete({ where: { id: params.id } });
+    return model.sponsorship.delete({ where: { id: params.id } });
   });

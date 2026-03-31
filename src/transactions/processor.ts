@@ -2,8 +2,7 @@ import type { Job } from 'bullmq';
 import { Prisma, type Transaction } from '@prisma/client';
 import { ethers } from 'ethers';
 import { BaseProcessor } from '../queue/processor';
-import { prisma } from '../db';
-import { enqueueUpdated } from '../queue/enqueue';
+import { prisma, model } from '../db';
 import * as tokenService from '../token/token.service';
 
 const scalarFields = Object.values(Prisma.TransactionScalarFieldEnum) as Prisma.TransactionScalarFieldEnum[];
@@ -38,9 +37,8 @@ class TransactionsProcessor extends BaseProcessor<Transaction> {
         amountTokens,
       );
 
-      // Update with txHash and enqueue (generates Transaction updated events)
-      const original = transaction;
-      const updated = await prisma.transaction.update({
+      // Update with txHash (generates Transaction updated events)
+      await model.transaction.update({
         where: { id: transaction.id },
         data: {
           txHash: tx.hash,
@@ -48,20 +46,18 @@ class TransactionsProcessor extends BaseProcessor<Transaction> {
           timeTakenMs: Date.now() - startTime,
           error: null,
         },
-      });
-      await enqueueUpdated('transaction', updated, original);
+      }, transaction);
 
       console.log(`[transaction] ${transaction.type} sent: ${tx.hash} nonce=${tx.nonce}`);
 
       // Enqueue user balance refresh (generates User updated events)
       if (message?.userId) {
         const userOriginal = await prisma.user.findUnique({ where: { id: message.userId } });
-        const userUpdated = await prisma.user.update({
-          where: { id: message.userId },
-          data: { action: 'RefreshTokenBalanceAndAllowance' },
-        });
         if (userOriginal) {
-          await enqueueUpdated('user', userUpdated, userOriginal);
+          await model.user.update({
+            where: { id: message.userId },
+            data: { action: 'RefreshTokenBalanceAndAllowance' },
+          }, userOriginal);
         }
       }
 

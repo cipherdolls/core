@@ -1,9 +1,8 @@
 import { Body } from '../helpers/schema';
 import { Elysia, t } from 'elysia';
-import { prisma } from '../db';
+import { prisma, model } from '../db';
 import { jwtGuard } from '../auth/jwt';
 import { parsePagination, paginationMeta } from '../helpers/pagination';
-import { enqueueCreated, enqueueUpdated, enqueueDeleted } from '../queue/enqueue';
 import { redisConnection } from '../queue/connection';
 
 const chatListInclude = {
@@ -90,7 +89,7 @@ export const chatsRoutes = new Elysia({ prefix: '/chats' })
       if (!(hasEnoughTokens || hasSponsorship)) { set.status = 403; return { error: 'Insufficient tokens or sponsorship' }; }
     }
 
-    const chat = await prisma.chat.create({
+    const chat = await model.chat.create({
       data: {
         user: { connect: { id: user.userId } },
         avatar: { connect: { id: body.avatarId } },
@@ -100,11 +99,9 @@ export const chatsRoutes = new Elysia({ prefix: '/chats' })
       include: chatDetailInclude,
     });
 
-    await enqueueCreated('chat', chat);
-
     // Create greeting message if scenario has one (enqueue AFTER chat so processors run in order)
     if (scenario?.greeting) {
-      const greetingMessage = await prisma.message.create({
+      await model.message.create({
         data: {
           role: 'ASSISTANT',
           content: scenario.greeting,
@@ -112,7 +109,6 @@ export const chatsRoutes = new Elysia({ prefix: '/chats' })
           user: { connect: { id: user.userId } },
         },
       });
-      await enqueueCreated('message', greetingMessage);
     }
     return chat;
   }, {
@@ -146,7 +142,7 @@ export const chatsRoutes = new Elysia({ prefix: '/chats' })
       if (!sttProvider) { set.status = 404; return { error: 'STT Provider not found' }; }
     }
 
-    const updated = await prisma.chat.update({
+    const updated = await model.chat.update({
       where: { id: params.id },
       data: {
         ...rest,
@@ -155,8 +151,7 @@ export const chatsRoutes = new Elysia({ prefix: '/chats' })
         ...(avatarId ? { avatar: { connect: { id: avatarId } } } : {}),
       },
       include: chatDetailInclude,
-    });
-    await enqueueUpdated('chat', updated, original);
+    }, original);
     return updated;
   }, {
     body: Body({
@@ -175,6 +170,5 @@ export const chatsRoutes = new Elysia({ prefix: '/chats' })
     if (item.userId !== user.userId && user.role !== 'ADMIN') { set.status = 403; return { error: 'Not authorized' }; }
     // Disconnect any doll linked to this chat before deleting
     await prisma.doll.updateMany({ where: { chatId: params.id }, data: { chatId: null } });
-    await enqueueDeleted('chat', item);
-    return prisma.chat.delete({ where: { id: params.id } });
+    return model.chat.delete({ where: { id: params.id } });
   });

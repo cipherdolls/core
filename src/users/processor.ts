@@ -2,8 +2,7 @@ import type { Job } from 'bullmq';
 import { Prisma, type User } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { BaseProcessor } from '../queue/processor';
-import { prisma } from '../db';
-import { enqueueUpdated, enqueueDeleted } from '../queue/enqueue';
+import { prisma, model } from '../db';
 import * as tokenService from '../token/token.service';
 
 const scalarFields = Object.values(Prisma.UserScalarFieldEnum) as Prisma.UserScalarFieldEnum[];
@@ -58,8 +57,7 @@ class UsersProcessor extends BaseProcessor<User> {
 
     console.log(`[user] tokenSpendable below 1 (${spendable}) for ${user.id} — removing ${sponsorships.length} sponsorship(s)`);
     for (const sponsorship of sponsorships) {
-      await prisma.sponsorship.delete({ where: { id: sponsorship.id } });
-      await enqueueDeleted('sponsorship', sponsorship);
+      await model.sponsorship.delete({ where: { id: sponsorship.id } });
     }
   }
 
@@ -67,11 +65,10 @@ class UsersProcessor extends BaseProcessor<User> {
     try {
       const tokenBalance = await tokenService.getBalance(user.signerAddress);
       const tokenSpendable = calcSpendable(tokenBalance, user.tokenAllowance);
-      const updated = await prisma.user.update({
+      await model.user.update({
         where: { id: user.id },
         data: { tokenBalance, tokenSpendable, action: 'Nothing' },
-      });
-      await enqueueUpdated('user', updated, user);
+      }, user);
       console.log(`[user] Refreshed balance for ${user.id}: ${tokenBalance}`);
     } catch (error: any) {
       console.error(`[user] Failed to refresh balance: ${error.message}`);
@@ -83,11 +80,10 @@ class UsersProcessor extends BaseProcessor<User> {
     try {
       const tokenAllowance = await tokenService.getAllowance(user.signerAddress);
       const tokenSpendable = calcSpendable(user.tokenBalance, tokenAllowance);
-      const updated = await prisma.user.update({
+      await model.user.update({
         where: { id: user.id },
         data: { tokenAllowance, tokenSpendable, action: 'Nothing' },
-      });
-      await enqueueUpdated('user', updated, user);
+      }, user);
       console.log(`[user] Refreshed allowance for ${user.id}: ${tokenAllowance}`);
     } catch (error: any) {
       console.error(`[user] Failed to refresh allowance: ${error.message}`);
@@ -100,11 +96,10 @@ class UsersProcessor extends BaseProcessor<User> {
       const tokenBalance = await tokenService.getBalance(user.signerAddress);
       const tokenAllowance = await tokenService.getAllowance(user.signerAddress);
       const tokenSpendable = calcSpendable(tokenBalance, tokenAllowance);
-      const updated = await prisma.user.update({
+      await model.user.update({
         where: { id: user.id },
         data: { tokenBalance, tokenAllowance, tokenSpendable, action: 'Nothing' },
-      });
-      await enqueueUpdated('user', updated, user);
+      }, user);
       console.log(`[user] Refreshed balance+allowance for ${user.id}: balance=${tokenBalance} allowance=${tokenAllowance} spendable=${tokenSpendable}`);
     } catch (error: any) {
       console.error(`[user] Failed to refresh balance+allowance: ${error.message}`);

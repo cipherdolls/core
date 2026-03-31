@@ -1,7 +1,7 @@
 import type { Job } from 'bullmq';
 import { Prisma, type TokenPermit } from '@prisma/client';
 import { BaseProcessor } from '../queue/processor';
-import { prisma } from '../db';
+import { prisma, model } from '../db';
 import * as tokenService from '../token/token.service';
 
 const scalarFields = Object.values(Prisma.TokenPermitScalarFieldEnum) as Prisma.TokenPermitScalarFieldEnum[];
@@ -26,13 +26,10 @@ class TokenPermitsProcessor extends BaseProcessor<TokenPermit> {
 
       // Trigger user token refresh via queue
       if (permit.userId) {
-        const original = await prisma.user.findUnique({ where: { id: permit.userId } });
-        const updated = await prisma.user.update({
+        await model.user.update({
           where: { id: permit.userId },
           data: { action: 'RefreshTokenBalanceAndAllowance' },
         });
-        const { enqueueUpdated } = await import('../queue/enqueue');
-        await enqueueUpdated('user', updated, original);
       }
     } catch (error: any) {
       console.error(`[tokenPermit] Permit execution failed: ${error.message}`);

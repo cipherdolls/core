@@ -2,9 +2,8 @@ import type { Job } from 'bullmq';
 import { Prisma, type TtsJob } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { BaseProcessor } from '../queue/processor';
-import { prisma } from '../db';
+import { prisma, model } from '../db';
 import { tts } from '../tts/tts.helper';
-import { enqueueCreated, enqueueUpdated } from '../queue/enqueue';
 
 const ASSETS_PATH = process.env.ASSETS_PATH ?? '/app/uploads';
 const MASTER_WALLET_ADDRESS = process.env.MASTER_WALLET_ADDRESS!;
@@ -41,18 +40,15 @@ class TtsJobsProcessor extends BaseProcessor<TtsJob> {
 
       const result = await tts(message.content, voice, provider, `${ASSETS_PATH}/messages`);
 
-      // Update message with audio file and enqueue
-      const originalMessage = message;
-      const updatedMessage = await prisma.message.update({
+      // Update message with audio file
+      await model.message.update({
         where: { id: message.id },
         data: { fileName: result.fileName, completed: true },
-      });
-      await enqueueUpdated('message', updatedMessage, originalMessage);
+      }, message);
 
-      // Update TTS job with metrics and enqueue (triggers usdCost field handler)
+      // Update TTS job with metrics (triggers usdCost field handler)
       const usdCost = new Decimal(result.usdCost);
-      const original = ttsJob;
-      const updated = await prisma.ttsJob.update({
+      await model.ttsJob.update({
         where: { id: ttsJob.id },
         data: {
           characters: result.characters,
@@ -60,8 +56,7 @@ class TtsJobsProcessor extends BaseProcessor<TtsJob> {
           timeTakenMs: Date.now() - startTime,
           ttsVoice: { connect: { id: voice.id } },
         },
-      });
-      await enqueueUpdated('ttsJob', updated, original);
+      }, ttsJob);
 
       // Create TTS transaction if cost > 0
       if (!usdCost.eq(0)) {
@@ -94,7 +89,7 @@ class TtsJobsProcessor extends BaseProcessor<TtsJob> {
     const ttsProviderUser = chat.avatar?.ttsVoice?.ttsProvider?.user;
     if (!ttsProviderUser || payer.signerAddress === ttsProviderUser.signerAddress) return;
 
-    const tx = await prisma.transaction.create({
+    await model.transaction.create({
       data: {
         type: 'tts',
         fromAddress: payer.signerAddress,
@@ -103,7 +98,6 @@ class TtsJobsProcessor extends BaseProcessor<TtsJob> {
         message: { connect: { id: message.id } },
       },
     });
-    await enqueueCreated('transaction', tx);
   }
 }
 

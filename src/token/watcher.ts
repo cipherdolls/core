@@ -1,6 +1,5 @@
 import { ethers } from 'ethers';
-import { prisma } from '../db';
-import { enqueueUpdated } from '../queue/enqueue';
+import { prisma, model } from '../db';
 import { resetNonce } from './token.service';
 
 const RPC_URL = process.env.RPC_URL;
@@ -28,8 +27,7 @@ async function checkPending(): Promise<void> {
 
       const gasUsed = receipt.gasUsed ? BigInt(receipt.gasUsed.toString()) : 0n;
 
-      const original = tx;
-      const updated = await prisma.transaction.update({
+      await model.transaction.update({
         where: { id: tx.id },
         data: {
           blockNumber: Number(receipt.blockNumber),
@@ -37,9 +35,7 @@ async function checkPending(): Promise<void> {
           feeFormatted: ethers.formatEther(gasUsed),
           completed: true,
         },
-      });
-
-      await enqueueUpdated('transaction', updated, original);
+      }, tx);
 
       console.log(`[watcher] ${tx.txHash} confirmed block=${receipt.blockNumber} gas=${gasUsed}`);
     } catch (error: any) {

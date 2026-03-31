@@ -1,9 +1,8 @@
 import { Body, pickFields } from '../helpers/schema';
 import { Elysia, t } from 'elysia';
-import { prisma } from '../db';
+import { prisma, model } from '../db';
 import { jwtGuard, optionalJwtGuard } from '../auth/jwt';
 import { requireAdmin } from '../helpers/admin';
-import { enqueueCreated, enqueueUpdated } from '../queue/enqueue';
 import { parsePagination, paginationMeta } from '../helpers/pagination';
 
 export const embeddingModelsRoutes = new Elysia({ prefix: '/embedding-models' })
@@ -41,11 +40,10 @@ export const embeddingModelsRoutes = new Elysia({ prefix: '/embedding-models' })
   .post('/', async ({ user, body, set }) => {
     requireAdmin(user, set);
     const { aiProviderId, ...rest } = body;
-    const item = await prisma.embeddingModel.create({
+    const item = await model.embeddingModel.create({
       data: { ...rest, aiProvider: { connect: { id: aiProviderId } } },
       include: { aiProvider: true },
     });
-    await enqueueCreated('embeddingModel', item);
     return item;
   }, {
     body: Body({
@@ -63,13 +61,11 @@ export const embeddingModelsRoutes = new Elysia({ prefix: '/embedding-models' })
     requireAdmin(user, set);
     const item = await prisma.embeddingModel.findUnique({ where: { id: params.id } });
     if (!item) { set.status = 404; return { error: 'Not found' }; }
-    const original = item;
-    const updated = await prisma.embeddingModel.update({
+    const updated = await model.embeddingModel.update({
       where: { id: params.id },
       data: pickFields(body, ['aiProviderId', 'providerModelName', 'info', 'dollarPerInputToken', 'dollarPerOutputToken', 'recommended', 'error']),
       include: { aiProvider: true },
-    });
-    await enqueueUpdated('embeddingModel', updated, original);
+    }, item);
     return updated;
   }, {
     body: Body({

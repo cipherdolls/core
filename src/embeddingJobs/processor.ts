@@ -1,8 +1,7 @@
 import type { Job } from 'bullmq';
 import { Prisma, type EmbeddingJob } from '@prisma/client';
 import { BaseProcessor } from '../queue/processor';
-import { prisma } from '../db';
-import { enqueueUpdated } from '../queue/enqueue';
+import { prisma, model } from '../db';
 
 const scalarFields = Object.values(Prisma.EmbeddingJobScalarFieldEnum) as Prisma.EmbeddingJobScalarFieldEnum[];
 
@@ -37,8 +36,7 @@ class EmbeddingJobsProcessor extends BaseProcessor<EmbeddingJob> {
       const inputTokens = Math.ceil(message.content.length / 4);
       const usdCost = inputTokens * Number(embeddingModel.dollarPerInputToken);
 
-      const original = embeddingJob;
-      const updated = await prisma.embeddingJob.update({
+      await model.embeddingJob.update({
         where: { id: embeddingJob.id },
         data: {
           inputTokens,
@@ -47,8 +45,7 @@ class EmbeddingJobsProcessor extends BaseProcessor<EmbeddingJob> {
           timeTakenMs: Date.now() - startTime,
           embeddingModel: { connect: { id: embeddingModel.id } },
         },
-      });
-      await enqueueUpdated('embeddingJob', updated, original);
+      }, embeddingJob);
 
       console.log(`[embeddingJob] Completed: ${inputTokens} tokens, $${usdCost.toFixed(6)}`);
     } catch (error: any) {

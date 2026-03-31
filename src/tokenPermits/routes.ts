@@ -1,9 +1,8 @@
 import { Body } from '../helpers/schema';
 import { Elysia, t } from 'elysia';
-import { prisma } from '../db';
+import { prisma, model } from '../db';
 import { jwtGuard } from '../auth/jwt';
 import { parsePagination, paginationMeta } from '../helpers/pagination';
-import { enqueueCreated } from '../queue/enqueue';
 
 export const tokenPermitsRoutes = new Elysia({ prefix: '/token-permits' })
   .use(jwtGuard)
@@ -35,7 +34,7 @@ export const tokenPermitsRoutes = new Elysia({ prefix: '/token-permits' })
   .post(
     '/',
     async ({ user, body }) => {
-      const item = await prisma.tokenPermit.create({
+      const item = await model.tokenPermit.create({
         data: {
           owner: body.owner,
           spender: body.spender,
@@ -48,7 +47,6 @@ export const tokenPermitsRoutes = new Elysia({ prefix: '/token-permits' })
           user: { connect: { id: user.userId } },
         },
       });
-      await enqueueCreated('tokenPermit', item);
       return item;
     },
     {
