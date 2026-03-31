@@ -49,7 +49,7 @@ export async function tts(
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`TTS API error (${response.status}): ${errorText}`);
+      throw new Error(`TTS error (${response.status}) from ${provider.name} (${KOKORO_URL}), voice ${voice.providerVoiceId}: ${errorText}`);
     }
 
     const audioBuffer = Buffer.from(await response.arrayBuffer());
