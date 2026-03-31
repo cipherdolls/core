@@ -7,6 +7,7 @@
     "db:generate": "bunx prisma generate",
     "db:push": "bunx prisma db push",
     "db:migrate": "bunx prisma migrate deploy",
+    "db:seed": "bunx prisma db seed",
     "test:e2e": "bun test --preload ./test/setup.ts ./test/**/*.e2e-spec.ts"
   },
   "dependencies": {
@@ -24,6 +25,9 @@
     "sharp": "^0.34.5",
     "websocket-stream": "^5.5.2",
     "zod": "^4.3.6"
+  },
+  "prisma": {
+    "seed": "bun run prisma/seed/index.ts"
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.9",
