@@ -14,6 +14,10 @@ export interface TtsResult {
   usdCost: number;
 }
 
+export interface TtsOptions {
+  onChunk?: (chunk: Buffer) => void;
+}
+
 function randomHex(length = 32): string {
   return Array(length).fill(null).map(() => Math.round(Math.random() * 16).toString(16)).join('');
 }
@@ -115,21 +119,24 @@ async function unrealSpeechTts(text: string, voice: TtsVoice): Promise<Buffer> {
 
 /**
  * Generate speech audio from text using the configured TTS provider.
+ * When options.onChunk is provided, audio is streamed via the callback
+ * and no file is saved to disk (fileName will be null).
  */
 export async function tts(
   text: string,
   voice: TtsVoice,
   provider: TtsProvider,
   outputDir: string,
+  options?: TtsOptions,
 ): Promise<TtsResult> {
   const characters = text.length;
   const usdCost = characters * Number(provider.dollarPerCharacter);
+  const saveFile = !options?.onChunk;
 
-  const fullDir = path.isAbsolute(outputDir) ? outputDir : path.join(ASSETS_PATH, outputDir);
-  fs.mkdirSync(fullDir, { recursive: true });
-
-  const fileName = `${randomHex()}.mp3`;
-  const filePath = path.join(fullDir, fileName);
+  if (saveFile) {
+    const fullDir = path.isAbsolute(outputDir) ? outputDir : path.join(ASSETS_PATH, outputDir);
+    fs.mkdirSync(fullDir, { recursive: true });
+  }
 
   try {
     let audioBuffer: Buffer;
@@ -147,6 +154,14 @@ export async function tts(
       throw new Error(`Unknown TTS provider: ${provider.name}`);
     }
 
+    if (!saveFile) {
+      options!.onChunk!(audioBuffer);
+      return { characters, fileName: null, usdCost };
+    }
+
+    const fullDir = path.isAbsolute(outputDir) ? outputDir : path.join(ASSETS_PATH, outputDir);
+    const fileName = `${randomHex()}.mp3`;
+    const filePath = path.join(fullDir, fileName);
     fs.writeFileSync(filePath, audioBuffer);
     console.log(`[tts] Generated ${fileName} via ${provider.name} (${characters} chars, $${usdCost.toFixed(6)})`);
 
