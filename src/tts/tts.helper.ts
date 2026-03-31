@@ -15,9 +15,103 @@ function randomHex(length = 32): string {
   return Array(length).fill(null).map(() => Math.round(Math.random() * 16).toString(16)).join('');
 }
 
+async function kokoroTts(text: string, voice: TtsVoice): Promise<Buffer> {
+  const response = await fetch(`${KOKORO_URL}/v1/audio/speech`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'kokoro',
+      input: text,
+      voice: voice.providerVoiceId,
+      response_format: 'mp3',
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`TTS error (${response.status}) from Kokoro (${KOKORO_URL}), voice ${voice.providerVoiceId}: ${errorText}`);
+  }
+
+  return Buffer.from(await response.arrayBuffer());
+}
+
+async function elevenlabsTts(text: string, voice: TtsVoice, provider: TtsProvider): Promise<Buffer> {
+  const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice.providerVoiceId}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'xi-api-key': provider.apiKey,
+    },
+    body: JSON.stringify({
+      text,
+      model_id: 'eleven_multilingual_v2',
+      output_format: 'mp3_44100_128',
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`TTS error (${response.status}) from ElevenLabs, voice ${voice.providerVoiceId}: ${errorText}`);
+  }
+
+  return Buffer.from(await response.arrayBuffer());
+}
+
+async function minimaxTts(text: string, voice: TtsVoice, provider: TtsProvider): Promise<Buffer> {
+  const response = await fetch('https://api.minimaxi.chat/v1/t2a_v2', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${provider.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'speech-02-hd',
+      text,
+      voice_setting: { voice_id: voice.providerVoiceId },
+      audio_setting: { format: 'mp3', sample_rate: 32000 },
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`TTS error (${response.status}) from MiniMax, voice ${voice.providerVoiceId}: ${errorText}`);
+  }
+
+  const data = await response.json() as any;
+  if (data.base_resp?.status_code !== 0) {
+    throw new Error(`TTS error from MiniMax, voice ${voice.providerVoiceId}: ${data.base_resp?.status_msg}`);
+  }
+
+  const audioHex = data.data?.audio;
+  if (!audioHex) throw new Error('MiniMax returned no audio data');
+  return Buffer.from(audioHex, 'hex');
+}
+
+async function unrealSpeechTts(text: string, voice: TtsVoice, provider: TtsProvider): Promise<Buffer> {
+  const response = await fetch('https://api.v7.unrealspeech.com/speech', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${provider.apiKey}`,
+    },
+    body: JSON.stringify({
+      Text: text,
+      VoiceId: voice.providerVoiceId,
+      Bitrate: '128k',
+      OutputFormat: 'mp3',
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`TTS error (${response.status}) from UnrealSpeech, voice ${voice.providerVoiceId}: ${errorText}`);
+  }
+
+  return Buffer.from(await response.arrayBuffer());
+}
+
 /**
  * Generate speech audio from text using the configured TTS provider.
- * Currently supports CipherdollsKokoro (OpenAI-compatible endpoint).
  */
 export async function tts(
   text: string,
@@ -28,7 +122,6 @@ export async function tts(
   const characters = text.length;
   const usdCost = characters * Number(provider.dollarPerCharacter);
 
-  // Ensure output directory exists
   const fullDir = path.isAbsolute(outputDir) ? outputDir : path.join(ASSETS_PATH, outputDir);
   fs.mkdirSync(fullDir, { recursive: true });
 
@@ -36,26 +129,23 @@ export async function tts(
   const filePath = path.join(fullDir, fileName);
 
   try {
-    const response = await fetch(`${KOKORO_URL}/v1/audio/speech`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'kokoro',
-        input: text,
-        voice: voice.providerVoiceId,
-        response_format: 'mp3',
-      }),
-    });
+    let audioBuffer: Buffer;
+    const name = provider.name.toLowerCase();
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`TTS error (${response.status}) from ${provider.name} (${KOKORO_URL}), voice ${voice.providerVoiceId}: ${errorText}`);
+    if (name.includes('kokoro')) {
+      audioBuffer = await kokoroTts(text, voice);
+    } else if (name.includes('elevenlabs') || name.includes('eleven')) {
+      audioBuffer = await elevenlabsTts(text, voice, provider);
+    } else if (name.includes('minimax')) {
+      audioBuffer = await minimaxTts(text, voice, provider);
+    } else if (name.includes('unrealspeech') || name.includes('unreal')) {
+      audioBuffer = await unrealSpeechTts(text, voice, provider);
+    } else {
+      throw new Error(`Unknown TTS provider: ${provider.name}`);
     }
 
-    const audioBuffer = Buffer.from(await response.arrayBuffer());
     fs.writeFileSync(filePath, audioBuffer);
-
-    console.log(`[tts] Generated ${fileName} (${characters} chars, $${usdCost.toFixed(6)})`);
+    console.log(`[tts] Generated ${fileName} via ${provider.name} (${characters} chars, $${usdCost.toFixed(6)})`);
 
     return { characters, fileName, usdCost };
   } catch (error: any) {
