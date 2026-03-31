@@ -17,14 +17,16 @@ interface WhisperResponse {
   segments: { start: number; end: number }[];
 }
 
-async function stt(message: Message, sttProvider: SttProvider, language: LanguageCode): Promise<{ content: string; audioSeconds: number; usdCost: number }> {
-  const filePath = path.join(MESSAGES_DIR, message.fileName!);
+function getTotalTime(response: WhisperResponse): number {
+  return response.segments.reduce((acc, s) => acc + (s.end - s.start), 0);
+}
 
-  const formData = new FormData();
+async function sttWhisperLocal(filePath: string, language: LanguageCode, baseUrl: string): Promise<WhisperResponse> {
   const fileBuffer = fs.readFileSync(filePath);
-  formData.append('audio_file', new File([fileBuffer], message.fileName!, { type: 'audio/mpeg' }));
+  const formData = new FormData();
+  formData.append('audio_file', new File([fileBuffer], path.basename(filePath), { type: 'audio/mpeg' }));
 
-  const url = new URL(`${WHISPER_URL}/asr`);
+  const url = new URL(`${baseUrl}/asr`);
   url.searchParams.append('encode', 'true');
   url.searchParams.append('task', 'transcribe');
   url.searchParams.append('word_timestamps', 'true');
@@ -33,11 +35,56 @@ async function stt(message: Message, sttProvider: SttProvider, language: Languag
 
   const response = await fetch(url.toString(), { method: 'POST', body: formData });
   if (!response.ok) throw new Error(`Whisper error (${response.status}): ${await response.text()}`);
+  return response.json() as Promise<WhisperResponse>;
+}
 
-  const whisperResponse = await response.json() as WhisperResponse;
-  const audioSeconds = whisperResponse.segments.reduce((acc, s) => acc + (s.end - s.start), 0);
+async function sttGroq(filePath: string, language: LanguageCode, model: string): Promise<WhisperResponse> {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw new Error('GROQ_API_KEY is not set');
+
+  const fileBuffer = fs.readFileSync(filePath);
+  const formData = new FormData();
+  formData.append('file', new File([fileBuffer], path.basename(filePath), { type: 'audio/mpeg' }));
+  formData.append('model', model);
+  formData.append('temperature', '0');
+  formData.append('response_format', 'verbose_json');
+  formData.append('language', language);
+
+  const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { Authorization: `bearer ${apiKey}` },
+    body: formData,
+  });
+  if (!response.ok) throw new Error(`Groq Whisper error (${response.status}): ${await response.text()}`);
+  return response.json() as Promise<WhisperResponse>;
+}
+
+async function stt(message: Message, sttProvider: SttProvider, language: LanguageCode): Promise<{ content: string; audioSeconds: number; usdCost: number }> {
+  const filePath = path.join(MESSAGES_DIR, message.fileName!);
+  let whisperResponse: WhisperResponse;
+
+  switch (sttProvider.name) {
+    case 'GroqWhisper':
+      whisperResponse = await sttGroq(filePath, language, 'whisper-large-v3');
+      break;
+    case 'GroqWhisperLargeV3En':
+      whisperResponse = await sttGroq(filePath, language, 'distil-whisper-large-v3-en');
+      break;
+    case 'GroqWhisperLargeV3Turbo':
+      whisperResponse = await sttGroq(filePath, language, 'whisper-large-v3-turbo');
+      break;
+    case 'CipherdollsWhisper':
+      whisperResponse = await sttWhisperLocal(filePath, language, 'https://whisper.ffaerber.duckdns.org');
+      break;
+    case 'LocalWhisper':
+      whisperResponse = await sttWhisperLocal(filePath, language, WHISPER_URL);
+      break;
+    default:
+      throw new Error(`Unknown STT provider: ${sttProvider.name}`);
+  }
+
+  const audioSeconds = getTotalTime(whisperResponse);
   const usdCost = Number(sttProvider.dollarPerSecond) * audioSeconds;
-
   return { content: whisperResponse.text, audioSeconds, usdCost };
 }
 
