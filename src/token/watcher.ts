@@ -4,7 +4,8 @@ import { enqueueUpdated } from '../queue/enqueue';
 import { resetNonce } from './token.service';
 
 const RPC_URL = process.env.RPC_URL;
-const POLL_INTERVAL = 1000;
+const POLL_INTERVAL = 5_000;
+const RPC_DELAY = 200;
 
 let provider: ethers.JsonRpcProvider;
 let running = false;
@@ -20,7 +21,10 @@ async function checkPending(): Promise<void> {
   for (const tx of pending) {
     try {
       const receipt = await provider.getTransactionReceipt(tx.txHash!);
-      if (!receipt) continue;
+      if (!receipt) {
+        await new Promise((r) => setTimeout(r, RPC_DELAY));
+        continue;
+      }
 
       const gasUsed = receipt.gasUsed ? BigInt(receipt.gasUsed.toString()) : 0n;
 
@@ -41,6 +45,7 @@ async function checkPending(): Promise<void> {
     } catch (error: any) {
       console.error(`[watcher] Error checking ${tx.txHash}: ${error.message}`);
       if (error.message?.includes('nonce')) await resetNonce();
+      await new Promise((r) => setTimeout(r, RPC_DELAY));
     }
   }
 }
