@@ -65,20 +65,7 @@ class TransactionsProcessor extends BaseProcessor<Transaction> {
         }
       }
 
-      // Wait for receipt in background, then update block info
-      tx.wait().then(async (receipt) => {
-        const gasUsed = receipt?.gasUsed ? BigInt(receipt.gasUsed.toString()) : 0n;
-        await prisma.transaction.update({
-          where: { id: transaction.id },
-          data: {
-            blockNumber: Number(receipt!.blockNumber),
-            feeWei: gasUsed,
-            feeFormatted: ethers.formatEther(gasUsed),
-          },
-        });
-      }).catch((err) => {
-        console.error(`[transaction] ${transaction.type} receipt failed: ${err.message}`);
-      });
+      // Receipt processing is handled by the blockchain watcher
     } catch (error: any) {
       console.error(`[transaction] ${transaction.type} failed: ${error.message}`);
       await prisma.transaction.update({

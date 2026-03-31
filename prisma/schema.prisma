@@ -284,6 +284,7 @@ model Transaction {
   feeWei             BigInt?
   feeFormatted       String?
   timeTakenMs        Int?
+  completed          Boolean  @default(false)
   error              String?
   message            Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
   messageId          String

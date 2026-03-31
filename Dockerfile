@@ -21,4 +21,4 @@ EXPOSE 4000
 HEALTHCHECK --interval=5s --timeout=3s --start-period=30s --retries=30 \
   CMD wget -qO- http://localhost:4000/auth/nonce || exit 1
 
-CMD ["bun", "run", "src/index.ts"]
+CMD ["bun", "run", "src/api.ts"]

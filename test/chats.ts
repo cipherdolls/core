@@ -341,6 +341,12 @@ export function describeChats() {
       expect(body).toHaveProperty('sttProviderId');
     });
 
+    it('alice refreshes hanaChat system-prompt', async () => {
+      const { status } = await api('PATCH', `/chats/${hanaChatId}`, auth.alice.jwt, { action: 'RefreshSystemPrompt' });
+      expect(status).toBe(200);
+      await waitForQueuesEmpty();
+    });
+
     it('alice get the hanaChat system-prompt', async () => {
       const res = await fetch(`${BASE_URL}/chats/${hanaChatId}/system-prompt`, {
         headers: { Authorization: `Bearer ${auth.alice.jwt}` },
@@ -548,6 +554,12 @@ export function describeChats() {
       const { status, body } = await api('GET', '/chats', auth.alice.jwt);
       expect(status).toBe(200);
       expect(body.data.length).toBe(2);
+    });
+
+    it('alice refreshes joiChat system-prompt', async () => {
+      const { status } = await api('PATCH', `/chats/${joiChatId}`, auth.alice.jwt, { action: 'RefreshSystemPrompt' });
+      expect(status).toBe(200);
+      await waitForQueuesEmpty();
     });
 
     it('alice get the joiChat system-prompt', async () => {

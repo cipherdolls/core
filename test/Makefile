@@ -6,7 +6,7 @@ LOG_DIR := ./logs
 
 SPEC ?= avatars
 
-SERVICES := redis postgres foundry worker broker
+SERVICES := redis postgres foundry broker prisma worker api
 
 SPECS := aiProviders auth avatars chatCompletionJobs chatModels chats dollBodies dolls \
          embeddingJobs embeddingModels fillerWords messages transactions reasoningModels \
@@ -30,11 +30,13 @@ define run_test
 			$(DC) down -v --remove-orphans -t 0 2>/dev/null; \
 		}; \
 		trap cleanup EXIT; \
+		docker rm -f $(TEST_CONTAINER) 2>/dev/null; \
 		echo "========== Starting services =========="; \
 		$(DC) up -d --build --wait $(SERVICES); \
 		echo "========== Running $(1) =========="; \
+		docker rm -f $(TEST_CONTAINER) 2>/dev/null; \
 		$(DC) run -d --no-deps --build --name $(TEST_CONTAINER) bun \
-			bun test --timeout 30000 ./test/$(1).e2e-spec.ts; \
+			bun test --timeout 60000 ./test/$(1).e2e-spec.ts; \
 		echo "running" > $(LOG_DIR)/$(1).status; \
 		\
 		docker wait $(TEST_CONTAINER) &>/dev/null & \

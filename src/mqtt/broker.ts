@@ -18,16 +18,8 @@ export function getBroker(): Aedes {
 }
 
 export async function startBroker() {
-  const enableTcp = process.env.MQTT_BROKER_TCP === 'true';
-  const enableWs = process.env.MQTT_BROKER_WS === 'true';
   const brokerUrl = process.env.MQTT_BROKER_URL ?? 'mqtt://localhost:1883';
   const brokerKey = process.env.MQTT_BROKER_KEY ?? '';
-
-  // Only create broker if TCP or WS is enabled
-  if (!enableTcp && !enableWs) {
-    console.log('MQTT broker disabled (MQTT_BROKER_TCP=false, MQTT_BROKER_WS=false)');
-    return;
-  }
 
   broker = new Aedes();
 
@@ -102,23 +94,19 @@ export async function startBroker() {
     callback(null, packet);
   }) as any;
 
-  /* ── TCP Server ────────────────────────────────────────────── */
-  if (enableTcp) {
-    tcpServer = net.createServer(broker.handle);
-    tcpServer.listen(1883, () => {
-      console.log(`MQTT TCP broker running on ${brokerUrl}`);
-    });
-  }
+  /* ── TCP Server (port 1883) ────────────────────────────────── */
+  tcpServer = net.createServer(broker.handle);
+  tcpServer.listen(1883, () => {
+    console.log(`MQTT TCP broker running on ${brokerUrl}`);
+  });
 
-  /* ── WebSocket Server ──────────────────────────────────────── */
-  if (enableWs) {
-    wsServer = http.createServer();
-    const ws = require('websocket-stream');
-    ws.createServer({ server: wsServer }, broker.handle);
-    wsServer.listen(8083, () => {
-      console.log('MQTT WebSocket broker running on port 8083');
-    });
-  }
+  /* ── WebSocket Server (port 8083) ──────────────────────────── */
+  wsServer = http.createServer();
+  const ws = require('websocket-stream');
+  ws.createServer({ server: wsServer }, broker.handle);
+  wsServer.listen(8083, () => {
+    console.log('MQTT WebSocket broker running on port 8083');
+  });
 }
 
 export async function stopBroker() {

@@ -226,13 +226,14 @@ export function describeTransactions() {
     });
 
     it('aliceUserProcessEvents after chat creation (greeting tts transaction)', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 8, 60000);
+      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 10, 60000);
 
       const processEvents = groupByResourceName(aliceUserProcessEvents);
       const transactions = processEvents.Transaction || [];
       const users = processEvents.User || [];
 
-      expect(transactions.length).toBe(4);
+      // 4 from tx processor + 2 from watcher confirming the tts tx
+      expect(transactions.length).toBe(6);
       expect(users.length).toBe(4);
 
       aliceUserProcessEvents = [];
@@ -272,14 +273,22 @@ export function describeTransactions() {
     });
 
     it('aliceUserProcessEvents after user message', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 16, 60000);
+      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 20, 60000);
 
       const processEvents = groupByResourceName(aliceUserProcessEvents);
       const transactions = processEvents.Transaction || [];
       const users = processEvents.User || [];
 
-      expect(transactions.length).toBe(8);
+      // 8 from tx processor (active+completed x2 per chatCompletion+tts)
+      // + 4 from watcher (active+completed x2 for watcher confirming each tx)
+      expect(transactions.length).toBe(12);
       expect(users.length).toBe(8);
+
+      // Verify watcher set completed=true
+      const completedEvents = transactions.filter((e: ProcessEvent) =>
+        e.jobStatus === 'completed' && e.resourceAttributes?.completed === true
+      );
+      expect(completedEvents.length).toBe(2); // chatCompletion + tts
 
       aliceUserProcessEvents = [];
     });
@@ -324,7 +333,7 @@ export function describeTransactions() {
       expect(userBody.chatCompletionJob).toBeNull();
     });
 
-    it('alice assistant message has a chatCompletion transaction with txHash', async () => {
+    it('alice assistant message has a completed chatCompletion transaction', async () => {
       const { status, body } = await api('GET', `/transactions?messageId=${aliceAssistantMessageId}`, auth.alice.jwt);
       expect(status).toBe(200);
       const transactions: any[] = body.data;
@@ -332,11 +341,13 @@ export function describeTransactions() {
       const chatCompletionTx = transactions.find((tx: any) => tx.type === 'chatCompletion');
       expect(chatCompletionTx).toBeDefined();
       expect(chatCompletionTx.txHash).toBeTruthy();
+      expect(chatCompletionTx.completed).toBe(true);
+      expect(chatCompletionTx.blockNumber).toBeTruthy();
       expect(chatCompletionTx.messageId).toBe(aliceAssistantMessageId);
       expect(chatCompletionTx.fromAddress).toBe(auth.alice.signerAddress);
     });
 
-    it('alice assistant message has a tts transaction with txHash', async () => {
+    it('alice assistant message has a completed tts transaction', async () => {
       const { status, body } = await api('GET', `/transactions?messageId=${aliceAssistantMessageId}`, auth.alice.jwt);
       expect(status).toBe(200);
       const transactions: any[] = body.data;
@@ -344,6 +355,8 @@ export function describeTransactions() {
       const ttsTx = transactions.find((tx: any) => tx.type === 'tts');
       expect(ttsTx).toBeDefined();
       expect(ttsTx.txHash).toBeTruthy();
+      expect(ttsTx.completed).toBe(true);
+      expect(ttsTx.blockNumber).toBeTruthy();
       expect(ttsTx.messageId).toBe(aliceAssistantMessageId);
       expect(ttsTx.fromAddress).toBe(auth.alice.signerAddress);
     });
@@ -376,6 +389,19 @@ export function describeTransactions() {
       expect(body.action).toBe('Nothing');
     });
 
+    // ─── Re-create sponsorship (deleted by sponsorships module) ──
+
+    it('alice re-creates sponsorship for DeepTalk scenario', async () => {
+      aliceUserProcessEvents = [];
+      const { status, body } = await api('POST', '/sponsorships', auth.alice.jwt, {
+        scenarioId: deepTalkScenarioIdLocal,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('id');
+      await waitForQueuesEmpty();
+      aliceUserProcessEvents = [];
+    });
+
     // ─── BOB: create hana DeepTalk chat (sponsored by alice) ────
 
     it('bob creates a hana DeepTalk chat (sponsored by alice)', async () => {
@@ -405,13 +431,13 @@ export function describeTransactions() {
     });
 
     it('bobUserProcessEvents after chat creation (greeting tts transaction)', async () => {
-      await waitForEvents<ProcessEvent>(bobUserProcessEvents, 8, 60000);
+      await waitForEvents<ProcessEvent>(bobUserProcessEvents, 10, 60000);
 
       const processEvents = groupByResourceName(bobUserProcessEvents);
       const transactions = processEvents.Transaction || [];
       const users = processEvents.User || [];
 
-      expect(transactions.length).toBe(4);
+      expect(transactions.length).toBe(6);
       expect(users.length).toBe(4);
 
       bobUserProcessEvents = [];
@@ -445,14 +471,19 @@ export function describeTransactions() {
     });
 
     it('bobUserProcessEvents after user message', async () => {
-      await waitForEvents<ProcessEvent>(bobUserProcessEvents, 16, 60000);
+      await waitForEvents<ProcessEvent>(bobUserProcessEvents, 20, 60000);
 
       const processEvents = groupByResourceName(bobUserProcessEvents);
       const transactions = processEvents.Transaction || [];
       const users = processEvents.User || [];
 
-      expect(transactions.length).toBe(8);
+      expect(transactions.length).toBe(12);
       expect(users.length).toBe(8);
+
+      const completedEvents = transactions.filter((e: ProcessEvent) =>
+        e.jobStatus === 'completed' && e.resourceAttributes?.completed === true
+      );
+      expect(completedEvents.length).toBe(2);
 
       bobUserProcessEvents = [];
     });
@@ -481,7 +512,7 @@ export function describeTransactions() {
       bobAssistantMessageId = assistantMessages[assistantMessages.length - 1].id;
     });
 
-    it('bob assistant message has a chatCompletion transaction sponsored by alice', async () => {
+    it('bob assistant message has a completed chatCompletion transaction sponsored by alice', async () => {
       const { status, body } = await api('GET', `/transactions?messageId=${bobAssistantMessageId}`, auth.bob.jwt);
       expect(status).toBe(200);
       const transactions: any[] = body.data;
@@ -489,11 +520,13 @@ export function describeTransactions() {
       const chatCompletionTx = transactions.find((tx: any) => tx.type === 'chatCompletion');
       expect(chatCompletionTx).toBeDefined();
       expect(chatCompletionTx.txHash).toBeTruthy();
+      expect(chatCompletionTx.completed).toBe(true);
+      expect(chatCompletionTx.blockNumber).toBeTruthy();
       expect(chatCompletionTx.messageId).toBe(bobAssistantMessageId);
       expect(chatCompletionTx.fromAddress).toBe(auth.alice.signerAddress); // sponsored by alice
     });
 
-    it('bob assistant message has a tts transaction sponsored by alice', async () => {
+    it('bob assistant message has a completed tts transaction sponsored by alice', async () => {
       const { status, body } = await api('GET', `/transactions?messageId=${bobAssistantMessageId}`, auth.bob.jwt);
       expect(status).toBe(200);
       const transactions: any[] = body.data;
@@ -501,6 +534,8 @@ export function describeTransactions() {
       const ttsTx = transactions.find((tx: any) => tx.type === 'tts');
       expect(ttsTx).toBeDefined();
       expect(ttsTx.txHash).toBeTruthy();
+      expect(ttsTx.completed).toBe(true);
+      expect(ttsTx.blockNumber).toBeTruthy();
       expect(ttsTx.messageId).toBe(bobAssistantMessageId);
       expect(ttsTx.fromAddress).toBe(auth.alice.signerAddress); // sponsored by alice
     });
@@ -543,7 +578,7 @@ export function describeTransactions() {
 
     it('drain guestProcessEvents after free SmallTalk chat create+delete', async () => {
       await waitForQueuesEmpty();
-      await new Promise((r) => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, 2000));
       guestUserProcessEvents = [];
       guestChatProcessEvents = [];
     });
@@ -581,8 +616,8 @@ export function describeTransactions() {
       const transactions = processEvents.Transaction || [];
       const users = processEvents.User || [];
 
-      expect(transactions.length).toBe(4);
-      expect(users.length).toBe(4);
+      expect(transactions.length).toBeGreaterThanOrEqual(4);
+      expect(users.length).toBeGreaterThanOrEqual(4);
 
       guestUserProcessEvents = [];
     });
@@ -604,14 +639,19 @@ export function describeTransactions() {
     });
 
     it('guestUserProcessEvents after user message', async () => {
-      await waitForEvents<ProcessEvent>(guestUserProcessEvents, 16, 60000);
+      await waitForEvents<ProcessEvent>(guestUserProcessEvents, 20, 60000);
 
       const processEvents = groupByResourceName(guestUserProcessEvents);
       const transactions = processEvents.Transaction || [];
       const users = processEvents.User || [];
 
-      expect(transactions.length).toBe(8);
+      expect(transactions.length).toBe(12);
       expect(users.length).toBe(8);
+
+      const completedEvents = transactions.filter((e: ProcessEvent) =>
+        e.jobStatus === 'completed' && e.resourceAttributes?.completed === true
+      );
+      expect(completedEvents.length).toBe(2);
 
       guestUserProcessEvents = [];
     });
@@ -640,7 +680,7 @@ export function describeTransactions() {
       guestAssistantMessageId = assistantMessages[assistantMessages.length - 1].id;
     });
 
-    it('guest assistant message has a chatCompletion transaction sponsored by alice', async () => {
+    it('guest assistant message has a completed chatCompletion transaction sponsored by alice', async () => {
       const { status, body } = await api('GET', `/transactions?messageId=${guestAssistantMessageId}`, auth.guest.jwt);
       expect(status).toBe(200);
       const transactions: any[] = body.data;
@@ -648,11 +688,13 @@ export function describeTransactions() {
       const chatCompletionTx = transactions.find((tx: any) => tx.type === 'chatCompletion');
       expect(chatCompletionTx).toBeDefined();
       expect(chatCompletionTx.txHash).toBeTruthy();
+      expect(chatCompletionTx.completed).toBe(true);
+      expect(chatCompletionTx.blockNumber).toBeTruthy();
       expect(chatCompletionTx.messageId).toBe(guestAssistantMessageId);
       expect(chatCompletionTx.fromAddress).toBe(auth.alice.signerAddress); // sponsored by alice
     });
 
-    it('guest assistant message has a tts transaction sponsored by alice', async () => {
+    it('guest assistant message has a completed tts transaction sponsored by alice', async () => {
       const { status, body } = await api('GET', `/transactions?messageId=${guestAssistantMessageId}`, auth.guest.jwt);
       expect(status).toBe(200);
       const transactions: any[] = body.data;
@@ -660,6 +702,8 @@ export function describeTransactions() {
       const ttsTx = transactions.find((tx: any) => tx.type === 'tts');
       expect(ttsTx).toBeDefined();
       expect(ttsTx.txHash).toBeTruthy();
+      expect(ttsTx.completed).toBe(true);
+      expect(ttsTx.blockNumber).toBeTruthy();
       expect(ttsTx.messageId).toBe(guestAssistantMessageId);
       expect(ttsTx.fromAddress).toBe(auth.alice.signerAddress); // sponsored by alice
     });

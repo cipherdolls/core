@@ -25,15 +25,8 @@ import {
   firmwaresProcessor,
 } from './processors';
 
-const IS_WORKER = process.env.WORKER === 'true';
-
-/** Register all BullMQ workers. Only runs in worker mode. */
+/** Register all BullMQ workers. */
 export function startWorkers() {
-  if (!IS_WORKER) {
-    console.log('Worker mode disabled (WORKER != true). Queues active, workers skipped.');
-    return;
-  }
-
   console.log('Starting BullMQ workers...');
 
   registerWorker('chat', (job) => chatsProcessor.process(job));

@@ -1,6 +1,6 @@
 services:
 
-  # Test runner — runs E2E specs against broker + worker
+  # Test runner — runs E2E specs against api + worker + broker
   bun:
     build:
       context: ../../core
@@ -14,11 +14,8 @@ services:
       - test-logs:/test-logs
     environment:
       BUN_TEST_TIMEOUT: "120000"
-      WORKER: "false"
-      BASE_URL: "http://broker:4000"
+      BASE_URL: "http://api:4000"
       MQTT_BROKER_URL: "mqtt://broker:1883"
-      MQTT_BROKER_TCP: "false"
-      MQTT_BROKER_WS: "false"
       NODE_ENV: test
       REDIS_HOST: redis
       RPC_URL: http://foundry:8545
@@ -27,14 +24,38 @@ services:
       postgres: { condition: service_healthy }
       foundry: { condition: service_healthy }
       worker: { condition: service_healthy }
+      api: { condition: service_healthy }
       broker: { condition: service_healthy }
     networks: [test]
 
 
-  # Worker — runs BullMQ processors (chatCompletion, TTS, transactions, etc.)
-  worker:
+  # Prisma — runs migrations then starts Prisma Studio
+  prisma:
     build:
       context: ../../core
+    command: ["sh", "-c", "bunx prisma migrate reset --force && bunx prisma studio"]
+    stop_signal: SIGKILL
+    env_file: [.env]
+    environment:
+      NODE_ENV: test
+    expose:
+      - "5555"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5555 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [test]
+
+
+  # API — REST endpoints only (no MQTT, no workers)
+  api:
+    build:
+      context: ../../core
+    command: ["bun", "run", "src/api.ts"]
     stop_signal: SIGKILL
     env_file: [.env]
     extra_hosts:
@@ -42,10 +63,6 @@ services:
     volumes:
       - uploads:/app/uploads
     environment:
-      WORKER: "true"
-      MQTT_BROKER_URL: "mqtt://broker:1883"
-      MQTT_BROKER_TCP: "false"
-      MQTT_BROKER_WS: "false"
       NODE_ENV: test
       REDIS_HOST: redis
       RPC_URL: http://foundry:8545
@@ -58,16 +75,17 @@ services:
       retries: 30
       start_period: 10s
     depends_on:
+      prisma: { condition: service_healthy }
       redis: { condition: service_healthy }
-      postgres: { condition: service_healthy }
       foundry: { condition: service_healthy }
     networks: [test]
 
 
-  # Broker — runs the API + embedded MQTT broker
-  broker:
+  # Worker — BullMQ processors (chatCompletion, TTS, transactions, etc.)
+  worker:
     build:
       context: ../../core
+    command: ["bun", "run", "src/worker.ts"]
     stop_signal: SIGKILL
     env_file: [.env]
     extra_hosts:
@@ -75,18 +93,40 @@ services:
     volumes:
       - uploads:/app/uploads
     environment:
-      WORKER: "false"
       MQTT_BROKER_URL: "mqtt://broker:1883"
-      MQTT_BROKER_TCP: "true"
-      MQTT_BROKER_WS: "false"
       NODE_ENV: test
       REDIS_HOST: redis
       RPC_URL: http://foundry:8545
+    deploy:
+      replicas: 2
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep 'src/worker.ts' | grep -v grep || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    depends_on:
+      prisma: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      foundry: { condition: service_healthy }
+      broker: { condition: service_healthy }
+    networks: [test]
+
+
+  # Broker — standalone MQTT broker (Aedes)
+  broker:
+    build:
+      context: ../../core
+    command: ["bun", "run", "src/broker.ts"]
+    stop_signal: SIGKILL
+    env_file: [.env]
+    environment:
+      NODE_ENV: test
+      REDIS_HOST: redis
     expose:
       - "1883"
-      - "4000"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/auth/nonce || exit 1"]
+      test: ["CMD-SHELL", "nc -z localhost 1883 || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 30
@@ -94,7 +134,6 @@ services:
     depends_on:
       redis: { condition: service_healthy }
       postgres: { condition: service_healthy }
-      foundry: { condition: service_healthy }
     networks: [test]
 
 
