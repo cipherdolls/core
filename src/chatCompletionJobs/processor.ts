@@ -74,6 +74,7 @@ class ChatCompletionJobsProcessor extends BaseProcessor<ChatCompletionJob> {
           usdCost,
           timeTakenMs: Date.now() - startTime,
           message: { connect: { id: assistantMessage.id } },
+          chatModel: { connect: { id: chatModel.id } },
         },
       }, ccJob);
 
