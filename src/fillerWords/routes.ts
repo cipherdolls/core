@@ -14,7 +14,7 @@ export const fillerWordsRoutes = new Elysia({ prefix: '/filler-words' })
     if (query.avatarId) where.avatarId = query.avatarId;
 
     const [items, total] = await prisma.$transaction([
-      prisma.fillerWord.findMany({ skip, take, where, orderBy: { createdAt: 'asc' } }),
+      prisma.fillerWord.findMany({ skip, take, where, include: { audio: true }, orderBy: { createdAt: 'asc' } }),
       prisma.fillerWord.count({ where }),
     ]);
     return { data: items, meta: paginationMeta(total, pageNum, take) };
@@ -22,7 +22,7 @@ export const fillerWordsRoutes = new Elysia({ prefix: '/filler-words' })
 
   /* ── GET /filler-words/:id ─────────────────────────────────────── */
   .get('/:id', async ({ params, set }) => {
-    const item = await prisma.fillerWord.findUnique({ where: { id: params.id } });
+    const item = await prisma.fillerWord.findUnique({ where: { id: params.id }, include: { audio: true } });
     if (!item) { set.status = 404; return { error: 'Not found' }; }
     return item;
   })

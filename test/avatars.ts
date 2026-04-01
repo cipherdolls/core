@@ -1,5 +1,5 @@
 
-import { auth, api, get, connectMqtt, waitForQueuesEmpty, assertValidProcessEvents, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
+import { auth, api, get, connectMqtt, waitForQueuesEmpty, assertValidProcessEvents, groupByResourceName, BASE_URL, type ProcessEvent, type MqttClient } from './helpers';
 
 export let hanaAvatarId: string;
 export let freyaAvatarId: string;
@@ -295,6 +295,39 @@ export function describeAvatars() {
       await waitForQueuesEmpty(60000);
       expect(aliceUserProcessEvents.length).toBe(2);
       aliceUserProcessEvents = [];
+    });
+
+    // ─── Introduction audio ───────────────────────────────────
+
+    it('alice updates hana avatar with introduction text', async () => {
+      const { status, body } = await api('PATCH', `/avatars/${hanaAvatarId}`, auth.alice.jwt, {
+        introduction: 'Hi, I am Hana. Nice to meet you!',
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('introduction', 'Hi, I am Hana. Nice to meet you!');
+    });
+
+    it('aliceUserProcessEvents contains >= 2 Avatar events after introduction update', async () => {
+      await waitForQueuesEmpty(60000);
+      const events = groupByResourceName(aliceUserProcessEvents);
+      const avatar = events.Avatar || [];
+      expect(avatar.length).toBeGreaterThanOrEqual(2);
+      aliceUserProcessEvents = [];
+    });
+
+    it('hana avatar has a connected audio record after introduction update', async () => {
+      const { status, body } = await api('GET', `/avatars/${hanaAvatarId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('audio');
+      expect(body.audio).not.toBeNull();
+      expect(body.audio).toHaveProperty('id');
+      expect(body.audio).toHaveProperty('avatarId', hanaAvatarId);
+    });
+
+    it('hana avatar audio can be served via audios endpoint', async () => {
+      const res = await fetch(`${BASE_URL}/audios/by/avatars/${hanaAvatarId}/audio.mp3`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toBe('audio/mpeg');
     });
 
     // ─── Publish freya — can't publish with unpublished scenarios ─

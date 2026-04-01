@@ -20,7 +20,7 @@ export const ttsVoicesRoutes = new Elysia({ prefix: '/tts-voices' })
         skip,
         take,
         where,
-        include: { ttsProvider: true },
+        include: { ttsProvider: true, audio: true },
         orderBy: [{ recommended: 'desc' }, { name: 'asc' }],
       }),
       prisma.ttsVoice.count({ where }),
@@ -31,7 +31,7 @@ export const ttsVoicesRoutes = new Elysia({ prefix: '/tts-voices' })
   .get('/:id', async ({ params, set }) => {
     const item = await prisma.ttsVoice.findUnique({
       where: { id: params.id },
-      include: { ttsProvider: true },
+      include: { ttsProvider: true, audio: true },
     });
     if (!item) { set.status = 404; return { error: 'Not found' }; }
     return item;
@@ -42,7 +42,7 @@ export const ttsVoicesRoutes = new Elysia({ prefix: '/tts-voices' })
     const { ttsProviderId, ...rest } = body;
     const item = await model.ttsVoice.create({
       data: { ...rest, ttsProvider: { connect: { id: ttsProviderId } } },
-      include: { ttsProvider: true },
+      include: { ttsProvider: true, audio: true },
     });
     return item;
   }, {
@@ -64,7 +64,7 @@ export const ttsVoicesRoutes = new Elysia({ prefix: '/tts-voices' })
     const updated = await model.ttsVoice.update({
       where: { id: params.id },
       data: pickFields(body, ['ttsProviderId', 'name', 'providerVoiceId', 'recommended', 'preview', 'gender', 'language']),
-      include: { ttsProvider: true },
+      include: { ttsProvider: true, audio: true },
     }, original);
     return updated;
   }, {

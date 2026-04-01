@@ -34,14 +34,21 @@ class TtsVoicesProcessor extends BaseProcessor<TtsVoice> {
       const ttsProvider = await prisma.ttsProvider.findUnique({ where: { id: voice.ttsProviderId } });
       if (!ttsProvider) return;
 
-      const result = await tts(PREVIEW_TEXT, voice, ttsProvider, `${ASSETS_PATH}/ttsVoices`);
+      const result = await tts(PREVIEW_TEXT, voice, ttsProvider, `${ASSETS_PATH}/audios`);
 
-      await prisma.ttsVoice.update({
-        where: { id: voice.id },
-        data: { preview: result.fileName },
+      // Delete existing audio record for this voice
+      const existing = await prisma.audio.findUnique({ where: { ttsVoiceId: voice.id } });
+      if (existing) {
+        await prisma.audio.delete({ where: { id: existing.id } });
+      }
+
+      // Create new audio record with the filename as ID (without .mp3 extension)
+      const audioId = result.fileName!.replace('.mp3', '');
+      await prisma.audio.create({
+        data: { id: audioId, ttsVoiceId: voice.id },
       });
 
-      console.log(`[ttsVoice] Preview generated for ${voice.name}: ${result.fileName}`);
+      console.log(`[ttsVoice] Preview audio created for ${voice.name}: ${audioId}`);
     } catch (error: any) {
       console.error(`[ttsVoice] Failed to generate preview for ${voice.name}: ${error.message}`);
       // Don't rethrow — preview failure shouldn't fail the whole job

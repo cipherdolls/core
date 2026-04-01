@@ -1,5 +1,5 @@
 
-import { auth, api, get, connectMqtt, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
+import { auth, api, connectMqtt, waitForQueuesEmpty, groupByResourceName, BASE_URL, type ProcessEvent, type MqttClient } from './helpers';
 
 export function describeFillerWords() {
   describe('fillerWords Controller (e2e)', () => {
@@ -50,23 +50,31 @@ export function describeFillerWords() {
       createdFillerWordId = body.id;
     });
 
-    it('aliceUserProcessEvents contains 4 Events (created active+completed, then updated active+completed) for FillerWord', async () => {
+    it('aliceUserProcessEvents contains 2 Events (created active+completed) for FillerWord', async () => {
       await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(aliceUserProcessEvents);
       const fillerWord = processEvents.FillerWord || [];
-      expect(fillerWord.length).toBe(4);
-      expect(aliceUserProcessEvents.length).toBe(4);
+      expect(fillerWord.length).toBe(2);
+      expect(aliceUserProcessEvents.length).toBe(2);
       aliceUserProcessEvents = [];
     });
 
-    it('alice gets her filler word with fileName set after processing', async () => {
+    it('alice gets her filler word with audio record after processing', async () => {
       const { status, body } = await api('GET', `/filler-words/${createdFillerWordId}`, auth.alice.jwt);
       expect(status).toBe(200);
       expect(body).toHaveProperty('id', createdFillerWordId);
       expect(body).toHaveProperty('text', 'okay');
       expect(body).toHaveProperty('avatarId', hanaAvatarId);
-      expect(body.fileName).not.toBeNull();
-      expect(body.fileName).toMatch(/\.mp3$/);
+      expect(body).toHaveProperty('audio');
+      expect(body.audio).not.toBeNull();
+      expect(body.audio).toHaveProperty('id');
+      expect(body.audio).toHaveProperty('fillerWordId', createdFillerWordId);
+    });
+
+    it('filler word audio can be served via audios endpoint', async () => {
+      const res = await fetch(`${BASE_URL}/audios/by/filler-words/${createdFillerWordId}/audio.mp3`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toBe('audio/mpeg');
     });
 
     // ─── Alice creates more filler words ────────────────────────
@@ -89,11 +97,11 @@ export function describeFillerWords() {
       expect(body).toHaveProperty('text', 'so');
     });
 
-    it('aliceUserProcessEvents contains 8 Events for 2 new filler words', async () => {
+    it('aliceUserProcessEvents contains 4 Events for 2 new filler words', async () => {
       await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(aliceUserProcessEvents);
       const fillerWord = processEvents.FillerWord || [];
-      expect(fillerWord.length).toBe(8);
+      expect(fillerWord.length).toBe(4);
       aliceUserProcessEvents = [];
     });
 
@@ -132,11 +140,11 @@ export function describeFillerWords() {
       expect(body).toHaveProperty('text', 'alright');
     });
 
-    it('aliceUserProcessEvents contains 4 Events for update (text change active+completed, then fileName change active+completed)', async () => {
+    it('aliceUserProcessEvents contains 2 Events for update (text change active+completed)', async () => {
       await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(aliceUserProcessEvents);
       const fillerWord = processEvents.FillerWord || [];
-      expect(fillerWord.length).toBe(4);
+      expect(fillerWord.length).toBe(2);
       aliceUserProcessEvents = [];
     });
 

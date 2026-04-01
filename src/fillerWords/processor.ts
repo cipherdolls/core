@@ -1,13 +1,11 @@
 import type { Job } from 'bullmq';
 import type { FillerWord } from '@prisma/client';
-import * as path from 'path';
-import * as fs from 'node:fs';
 import { BaseProcessor } from '../queue/processor';
-import { prisma, model } from '../db';
+import { prisma } from '../db';
 import { tts } from '../tts/tts.helper';
+import { deleteAudioFile } from '../audios/audios';
 
 const ASSETS_PATH = process.env.ASSETS_PATH ?? '/app/uploads';
-const FILLER_WORDS_DIR = path.join(ASSETS_PATH, 'fillerWords');
 
 class FillerWordsProcessor extends BaseProcessor<FillerWord> {
   constructor() {
@@ -35,16 +33,10 @@ class FillerWordsProcessor extends BaseProcessor<FillerWord> {
     console.log(`[fillerWord] Deleted ${entity.id}`);
     this.publishStatus(job, targets, 'active');
 
-    if (entity.fileName) {
-      const filePath = path.join(FILLER_WORDS_DIR, entity.fileName);
-      try {
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-          console.log(`[fillerWord] Deleted audio file ${filePath}`);
-        }
-      } catch (error: any) {
-        console.warn(`[fillerWord] Failed to delete audio file: ${error.message}`);
-      }
+    const existing = await prisma.audio.findUnique({ where: { fillerWordId: entity.id } });
+    if (existing) {
+      deleteAudioFile(existing.id);
+      console.log(`[fillerWord] Deleted audio file ${existing.id}`);
     }
 
     this.publishStatus(job, targets, 'completed');
@@ -60,12 +52,22 @@ class FillerWordsProcessor extends BaseProcessor<FillerWord> {
     const ttsProvider = await prisma.ttsProvider.findUnique({ where: { id: ttsVoice.ttsProviderId } });
     if (!ttsProvider) throw new Error(`TtsProvider ${ttsVoice.ttsProviderId} not found`);
 
-    const result = await tts(fillerWord.text, ttsVoice, ttsProvider, FILLER_WORDS_DIR);
+    const result = await tts(fillerWord.text, ttsVoice, ttsProvider, `${ASSETS_PATH}/audios`);
 
-    await model.fillerWord.update({
-      where: { id: fillerWord.id },
-      data: { fileName: result.fileName },
+    // Delete existing audio record for this filler word
+    const existing = await prisma.audio.findUnique({ where: { fillerWordId: fillerWord.id } });
+    if (existing) {
+      deleteAudioFile(existing.id);
+      await prisma.audio.delete({ where: { id: existing.id } });
+    }
+
+    // Create new audio record
+    const audioId = result.fileName!.replace('.mp3', '');
+    await prisma.audio.create({
+      data: { id: audioId, fillerWordId: fillerWord.id },
     });
+
+    console.log(`[fillerWord] Audio created for "${fillerWord.text}": ${audioId}`);
   }
 }
 

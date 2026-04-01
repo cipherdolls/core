@@ -1,5 +1,5 @@
 
-import { auth, api, get, connectMqtt, subscribeTopic, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
+import { auth, api, connectMqtt, subscribeTopic, waitForQueuesEmpty, groupByResourceName, BASE_URL, type ProcessEvent, type MqttClient } from './helpers';
 
 // Module-level IDs for cross-test imports
 export let heartVoiceId: string;
@@ -115,7 +115,18 @@ export function describeTtsVoices() {
       expect(body).toHaveProperty('id', kokoroHeart.id);
       expect(body).toHaveProperty('name', kokoroHeart.name);
       expect(body).toHaveProperty('ttsProviderId', kokoro.id);
-      // NOTE: preview check skipped - no TTS integration in core
+      expect(body).toHaveProperty('audio');
+      expect(body.audio).not.toBeNull();
+      expect(body.audio).toHaveProperty('id');
+      expect(body.audio).toHaveProperty('ttsVoiceId', kokoroHeart.id);
+    });
+
+    // ─── READ: Heart voice has connected audio record ───────────
+
+    it('kokoroHeart ttsVoice has a connected audio record after preview generation', async () => {
+      const res = await fetch(`${BASE_URL}/audios/by/tts-voices/${heartVoiceId}/audio.mp3`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toBe('audio/mpeg');
     });
 
     // ─── ADMIN updates Heart voice gender ───────────────────────
@@ -219,6 +230,12 @@ export function describeTtsVoices() {
       const ttsVoice = events.TtsVoice || [];
       expect(ttsVoice.length).toBeGreaterThanOrEqual(2);
       adminUserProcessEvents = [];
+    });
+
+    it('kokoroBella ttsVoice has a connected audio record after creation', async () => {
+      const res = await fetch(`${BASE_URL}/audios/by/tts-voices/${bellaVoiceId}/audio.mp3`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toBe('audio/mpeg');
     });
 
     // ─── ADMIN adds Nicole voice ────────────────────────────────

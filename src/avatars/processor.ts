@@ -33,14 +33,21 @@ class AvatarsProcessor extends BaseProcessor<Avatar> {
       const provider = await prisma.ttsProvider.findUnique({ where: { id: voice.ttsProviderId } });
       if (!provider) return;
 
-      const result = await tts(avatar.introduction, voice, provider, `${ASSETS_PATH}/avatars`);
+      const result = await tts(avatar.introduction, voice, provider, `${ASSETS_PATH}/audios`);
 
-      await prisma.avatar.update({
-        where: { id: avatar.id },
-        data: { introductionAudio: result.fileName },
+      // Delete existing audio record for this avatar
+      const existing = await prisma.audio.findUnique({ where: { avatarId: avatar.id } });
+      if (existing) {
+        await prisma.audio.delete({ where: { id: existing.id } });
+      }
+
+      // Create new audio record with the filename as ID (without .mp3 extension)
+      const audioId = result.fileName!.replace('.mp3', '');
+      await prisma.audio.create({
+        data: { id: audioId, avatarId: avatar.id },
       });
 
-      console.log(`[avatar] Introduction audio generated for ${avatar.name}: ${result.fileName}`);
+      console.log(`[avatar] Introduction audio created for ${avatar.name}: ${audioId}`);
     } catch (error: any) {
       console.error(`[avatar] Failed to generate intro audio for ${avatar.name}: ${error.message}`);
     }

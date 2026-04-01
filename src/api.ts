@@ -28,6 +28,7 @@ import { embeddingJobsRoutes } from './embeddingJobs/routes';
 import { fillerWordsRoutes } from './fillerWords/routes';
 import { firmwaresRoutes } from './firmwares/routes';
 import { picturesRoutes } from './pictures/routes';
+import { audiosRoutes } from './audios/routes';
 import { tokenRoutes } from './token/routes';
 const port = process.env.PORT ?? 4000;
 
@@ -87,6 +88,7 @@ const app = new Elysia({ normalize: true })
   .use(fillerWordsRoutes)
   .use(firmwaresRoutes)
   .use(picturesRoutes)
+  .use(audiosRoutes)
   .use(tokenRoutes)
   .listen(port);
 

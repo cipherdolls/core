@@ -10,6 +10,7 @@ const avatarInclude = {
   scenarios: true,
   _count: { select: { chats: true } },
   picture: true,
+  audio: true,
 };
 
 export const avatarsRoutes = new Elysia({ prefix: '/avatars' })
@@ -128,6 +129,7 @@ export const avatarsRoutes = new Elysia({ prefix: '/avatars' })
       shortDesc: t.String(),
       character: t.String(),
       ttsVoiceId: t.String(),
+      introduction: t.Optional(t.String()),
       language: t.Optional(t.String()),
       gender: t.Optional(t.String()),
       published: t.Optional(t.Boolean()),
@@ -179,6 +181,7 @@ export const avatarsRoutes = new Elysia({ prefix: '/avatars' })
       shortDesc: t.Optional(t.String()),
       character: t.Optional(t.String()),
       ttsVoiceId: t.Optional(t.String()),
+      introduction: t.Optional(t.String()),
       language: t.Optional(t.String()),
       gender: t.Optional(t.String()),
       published: t.Optional(t.Boolean()),

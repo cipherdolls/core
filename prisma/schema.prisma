@@ -84,6 +84,19 @@ model Picture {
   ttsProviderId String?      @unique
 }
 
+model Audio {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  avatar       Avatar?     @relation(fields: [avatarId], references: [id], onDelete: Cascade)
+  avatarId     String?     @unique
+  fillerWord   FillerWord? @relation(fields: [fillerWordId], references: [id], onDelete: Cascade)
+  fillerWordId String?     @unique
+  ttsVoice     TtsVoice?   @relation(fields: [ttsVoiceId], references: [id], onDelete: Cascade)
+  ttsVoiceId   String?     @unique
+}
+
 model Doll {
   id           String   @id @default(uuid())
   createdAt    DateTime @default(now())
@@ -140,6 +153,7 @@ model Avatar {
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
   picture   Picture?
+  audio     Audio?
   name      String
   shortDesc String
   introduction      String?
@@ -168,6 +182,7 @@ model FillerWord {
   updatedAt DateTime @updatedAt
   text      String
   fileName  String?
+  audio     Audio?
   avatar    Avatar   @relation(fields: [avatarId], references: [id], onDelete: Cascade)
   avatarId  String
 }
@@ -471,6 +486,7 @@ model TtsVoice {
   ttsProviderId String
   avatars       Avatar[]
   ttsJobs       TtsJob[]
+  audio         Audio?
 }
 
 model TokenPermit {
