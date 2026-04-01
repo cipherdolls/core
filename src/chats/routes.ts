@@ -6,15 +6,16 @@ import { parsePagination, paginationMeta } from '../helpers/pagination';
 import { redisConnection } from '../queue/connection';
 
 const chatListInclude = {
-  avatar: true,
-  scenario: true,
+  avatar: { include: { picture: true } },
+  scenario: { include: { picture: true } },
   _count: { select: { messages: true, chatCompletionJobs: true } },
 };
 
 const chatDetailInclude = {
-  avatar: true,
+  avatar: { include: { picture: true } },
   scenario: {
     include: {
+      picture: true,
       chatModel: { include: { aiProvider: true } },
       embeddingModel: { include: { aiProvider: true } },
       reasoningModel: { include: { aiProvider: true } },
