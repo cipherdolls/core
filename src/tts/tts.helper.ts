@@ -65,7 +65,8 @@ async function elevenlabsTts(text: string, voice: TtsVoice): Promise<Buffer> {
 }
 
 async function elevenlabsTtsStream(text: string, voice: TtsVoice, onChunk: (chunk: Buffer) => void): Promise<void> {
-  const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice.providerVoiceId}/stream`, {
+  const url = `https://api.elevenlabs.io/v1/text-to-speech/${voice.providerVoiceId}/stream?output_format=pcm_24000`;
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -74,7 +75,6 @@ async function elevenlabsTtsStream(text: string, voice: TtsVoice, onChunk: (chun
     body: JSON.stringify({
       text,
       model_id: 'eleven_multilingual_v2',
-      output_format: 'pcm_24000',
     }),
   });
 
