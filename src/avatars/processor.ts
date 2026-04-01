@@ -49,7 +49,7 @@ class AvatarsProcessor extends BaseProcessor<Avatar> {
 
       console.log(`[avatar] Introduction audio created for ${avatar.name}: ${audioId}`);
     } catch (error: any) {
-      console.error(`[avatar] Failed to generate intro audio for ${avatar.name}: ${error.message}`);
+      console.error(`[avatar] Failed to generate intro audio for ${avatar.name}:`, error);
     }
   }
 }

@@ -206,7 +206,7 @@ export async function tts(
 
     return { characters, fileName, usdCost };
   } catch (error: any) {
-    console.error(`[tts] Failed: ${error.message}`);
+    console.error(`[tts] Failed:`, error);
     throw error;
   }
 }
