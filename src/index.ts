@@ -9,11 +9,11 @@ import { seed } from "./db/seed";
 
 // Run migrations and seed
 import { db, schema } from "./db";
-import Database from "better-sqlite3";
+import { Database } from "bun:sqlite";
 
 // Create tables if they don't exist
 const sqlite = new Database(process.env.DB_PATH ?? "cipher_dolls.db");
-sqlite.exec(`
+sqlite.run(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
@@ -68,7 +68,7 @@ sqlite.exec(`
     rank INTEGER
   );
 `);
-sqlite.close();
+sqlite.close(false);
 
 // Seed default data
 seed();
