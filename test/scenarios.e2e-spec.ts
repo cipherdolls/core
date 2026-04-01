@@ -6,6 +6,8 @@ import { describeEmbeddingModels } from './embeddingModels';
 import { describeReasoningModels } from './reasoningModels';
 import { describeScenarios } from './scenarios';
 import { describeTokenPermits } from './tokenPermits';
+import { describeTtsProviders } from './ttsProviders';
+import { describeTtsVoices } from './ttsVoices';
 import { setBeforeAll, setAfterAll } from './setup';
 describe('scenarios Controller (e2e)', () => {
   setBeforeAll();
@@ -16,6 +18,8 @@ describe('scenarios Controller (e2e)', () => {
   describeChatModels();
   describeEmbeddingModels();
   describeReasoningModels();
+  describeTtsProviders();
+  describeTtsVoices();
   describeScenarios();
 
   setAfterAll();

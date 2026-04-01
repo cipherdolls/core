@@ -10,6 +10,7 @@ const scenarioInclude = {
   embeddingModel: { include: { aiProvider: true } },
   reasoningModel: { include: { aiProvider: true } },
   picture: true,
+  avatars: true,
 };
 
 export const scenariosRoutes = new Elysia({ prefix: '/scenarios' })
@@ -95,7 +96,7 @@ export const scenariosRoutes = new Elysia({ prefix: '/scenarios' })
       return { error: 'Insufficient spendable tokens' };
     }
 
-    const { chatModelId, embeddingModelId, reasoningModelId, ...rest } = body;
+    const { chatModelId, embeddingModelId, reasoningModelId, avatarIds, ...rest } = body;
     // Auto-compute free flag based on dollarPerMessage
     const free = (rest.dollarPerMessage === undefined || rest.dollarPerMessage === 0) ? true : false;
     const item = await model.scenario.create({
@@ -106,6 +107,7 @@ export const scenariosRoutes = new Elysia({ prefix: '/scenarios' })
         chatModel: { connect: { id: chatModelId } },
         ...(embeddingModelId ? { embeddingModel: { connect: { id: embeddingModelId } } } : {}),
         ...(reasoningModelId ? { reasoningModel: { connect: { id: reasoningModelId } } } : {}),
+        ...(avatarIds ? { avatars: { connect: avatarIds.map((id: string) => ({ id })) } } : {}),
       },
       include: scenarioInclude,
     });
@@ -127,6 +129,7 @@ export const scenariosRoutes = new Elysia({ prefix: '/scenarios' })
       nsfw: t.Optional(t.Boolean()),
       userGender: t.Optional(t.String()),
       avatarGender: t.Optional(t.String()),
+      avatarIds: t.Optional(t.Array(t.String())),
     }),
   })
 
@@ -136,7 +139,7 @@ export const scenariosRoutes = new Elysia({ prefix: '/scenarios' })
     if (!item) { set.status = 404; return { error: 'Not found' }; }
     if (item.userId !== user.userId && user.role !== 'ADMIN') { set.status = 403; return { error: 'Not authorized' }; }
 
-    const { chatModelId, embeddingModelId, reasoningModelId, ...rest } = body;
+    const { chatModelId, embeddingModelId, reasoningModelId, avatarIds, ...rest } = body;
     // Auto-compute free flag when dollarPerMessage changes
     if (body.dollarPerMessage !== undefined) {
       (rest as any).free = body.dollarPerMessage === 0;
@@ -148,6 +151,7 @@ export const scenariosRoutes = new Elysia({ prefix: '/scenarios' })
         ...(chatModelId ? { chatModel: { connect: { id: chatModelId } } } : {}),
         ...(embeddingModelId ? { embeddingModel: { connect: { id: embeddingModelId } } } : embeddingModelId === null ? { embeddingModel: { disconnect: true } } : {}),
         ...(reasoningModelId ? { reasoningModel: { connect: { id: reasoningModelId } } } : reasoningModelId === null ? { reasoningModel: { disconnect: true } } : {}),
+        ...(avatarIds ? { avatars: { set: avatarIds.map((id: string) => ({ id })) } } : {}),
       },
       include: scenarioInclude,
     }, item);
@@ -171,6 +175,7 @@ export const scenariosRoutes = new Elysia({ prefix: '/scenarios' })
       recommended: t.Optional(t.Boolean()),
       userGender: t.Optional(t.Union([t.String(), t.Null()])),
       avatarGender: t.Optional(t.Union([t.String(), t.Null()])),
+      avatarIds: t.Optional(t.Array(t.String())),
     }),
   })
 

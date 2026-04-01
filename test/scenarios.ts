@@ -3,6 +3,7 @@ import { auth, api, get, connectMqtt, waitForQueuesEmpty, groupByResourceName, t
 import { chatModelId } from './chatModels';
 import { embeddingModelId } from './embeddingModels';
 import { reasoningModelId } from './reasoningModels';
+import { heartVoiceId } from './ttsVoices';
 
 export let smallTalkScenarioId: string;
 export let deepTalkScenarioId: string;
@@ -628,6 +629,86 @@ export function describeScenarios() {
       expect(detail).toHaveProperty('free', true);
       expect(detail).toHaveProperty('userGender', 'Male');
       expect(detail).toHaveProperty('avatarGender', 'Female');
+    });
+
+    // ─── Avatar assignment on scenario create & patch ───────────
+
+    let avatarForScenarioId: string;
+
+    it('alice creates an avatar for scenario-avatar tests', async () => {
+      const { status, body } = await api('POST', '/avatars', auth.alice.jwt, {
+        name: 'ScenarioTestAvatar',
+        shortDesc: 'Avatar for scenario tests',
+        character: 'Helpful test avatar',
+        ttsVoiceId: heartVoiceId,
+        gender: 'Female',
+      });
+      expect(status).toBe(200);
+      avatarForScenarioId = body.id;
+    });
+
+    it('alice creates a scenario with avatarIds', async () => {
+      const { status, body } = await api('POST', '/scenarios', auth.alice.jwt, {
+        name: 'Avatar Linked Scenario',
+        systemMessage: 'scenario with avatar',
+        chatModelId,
+        avatarIds: [avatarForScenarioId],
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('name', 'Avatar Linked Scenario');
+      expect(body.avatars).toHaveLength(1);
+      expect(body.avatars[0]).toHaveProperty('id', avatarForScenarioId);
+    });
+
+    it('consume events after avatar-linked scenario create', async () => {
+      await waitForQueuesEmpty(60000);
+      aliceUserProcessEvents = [];
+    });
+
+    it('alice patches SmallTalk scenario to add avatar via avatarIds', async () => {
+      const { status, body } = await api('PATCH', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt, {
+        avatarIds: [avatarForScenarioId],
+      });
+      expect(status).toBe(200);
+      expect(body.avatars).toHaveLength(1);
+      expect(body.avatars[0]).toHaveProperty('id', avatarForScenarioId);
+    });
+
+    it('consume events after avatar patch', async () => {
+      await waitForQueuesEmpty(60000);
+      aliceUserProcessEvents = [];
+    });
+
+    it('alice patches SmallTalk scenario to remove all avatars', async () => {
+      const { status, body } = await api('PATCH', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt, {
+        avatarIds: [],
+      });
+      expect(status).toBe(200);
+      expect(body.avatars).toHaveLength(0);
+    });
+
+    it('consume events after avatar removal', async () => {
+      await waitForQueuesEmpty(60000);
+      aliceUserProcessEvents = [];
+    });
+
+    it('GET scenario by id returns avatars', async () => {
+      // Re-add avatar first
+      await api('PATCH', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt, {
+        avatarIds: [avatarForScenarioId],
+      });
+      await waitForQueuesEmpty(60000);
+      aliceUserProcessEvents = [];
+
+      const { status, body } = await api('GET', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+      expect(body.avatars).toHaveLength(1);
+      expect(body.avatars[0]).toHaveProperty('id', avatarForScenarioId);
+    });
+
+    it('consume events after avatar re-add', async () => {
+      await waitForQueuesEmpty(60000);
+      aliceUserProcessEvents = [];
     });
 
     // ─── Guest still can't create ──────────────────────────────
