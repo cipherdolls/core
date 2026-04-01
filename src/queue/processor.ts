@@ -58,7 +58,7 @@ export abstract class BaseProcessor<T extends Record<string, any>> {
     console.log(`[${this.entityName}] Created ${entity?.id}`);
 
     try {
-      this.publishStatus(job, targets, 'active');
+      this.publishStatus(job, targets, 'active', { ...entity });
       await this.onCreated(job, entity);
       this.publishStatus(job, targets, 'completed');
     } catch (error: any) {
