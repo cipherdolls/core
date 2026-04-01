@@ -1,5 +1,6 @@
 
-import { auth, api, get, connectMqtt, waitForEvents, groupByResourceName, BASE_URL, type ProcessEvent, type MqttClient } from './helpers';
+import { auth, api, get, connectMqtt, waitForQueuesEmpty, assertValidProcessEvents, groupByResourceName, BASE_URL, type ProcessEvent, type MqttClient } from './helpers';
+import WebSocket from 'ws';
 
 export function describeMessages() {
   describe('Messages', () => {
@@ -11,6 +12,32 @@ export function describeMessages() {
     let aliceMqttClient: MqttClient;
     let aliceChatProcessEvents: ProcessEvent[] = [];
     let aliceUserProcessEvents: ProcessEvent[] = [];
+
+    // Stream-player WebSocket TTS capture
+    const STREAM_PLAYER_URL = process.env.STREAM_PLAYER_URL ?? 'ws://stream-player:8001';
+    let streamPlayerWs: WebSocket;
+    let ttsTextMessages: any[] = [];
+    let ttsBinaryChunks: Buffer[] = [];
+    let lastTtsMp3Buffer: Buffer | null = null;
+
+    function connectStreamPlayerWs(chatId: string): Promise<void> {
+      return new Promise((resolve, reject) => {
+        const url = `${STREAM_PLAYER_URL}/ws-player?auth=${encodeURIComponent(auth.alice.jwt)}&chatId=${encodeURIComponent(chatId)}`;
+        streamPlayerWs = new WebSocket(url);
+        streamPlayerWs.binaryType = 'nodebuffer';
+        streamPlayerWs.on('open', () => resolve());
+        streamPlayerWs.on('error', (err) => reject(err));
+        streamPlayerWs.on('message', (data: Buffer, isBinary: boolean) => {
+          if (isBinary) {
+            ttsBinaryChunks.push(data);
+          } else {
+            try {
+              ttsTextMessages.push(JSON.parse(data.toString()));
+            } catch {}
+          }
+        });
+      });
+    }
 
     // ─── MQTT setup ───────────────────────────────────────────
 
@@ -49,10 +76,10 @@ export function describeMessages() {
       });
     });
 
-    it('drain late events from previous modules', async () => {
-      await new Promise((r) => setTimeout(r, 2000));
-      aliceUserProcessEvents = [];
-      aliceChatProcessEvents = [];
+    it('queues are empty before messages tests', async () => {
+      await waitForQueuesEmpty(60000);
+      expect(aliceUserProcessEvents.length).toBe(0);
+      expect(aliceChatProcessEvents.length).toBe(0);
     });
 
     // ─── Get greeting messages ─────────────────────────────────
@@ -308,8 +335,12 @@ export function describeMessages() {
       expect(body).toHaveProperty('tts', false);
     });
 
-    it('drain events after scenario switch', async () => {
-      await new Promise((r) => setTimeout(r, 5000));
+    it('processEvents after scenario switch contain Chat update', async () => {
+      await waitForQueuesEmpty(60000);
+      assertValidProcessEvents(aliceChatProcessEvents);
+      assertValidProcessEvents(aliceUserProcessEvents);
+      const events = groupByResourceName(aliceChatProcessEvents);
+      expect(events.Chat?.length).toBeGreaterThanOrEqual(2); // active + completed
       aliceChatProcessEvents = [];
       aliceUserProcessEvents = [];
     });
@@ -490,10 +521,21 @@ export function describeMessages() {
     let kokoroAudioMessageId: string;
     let messageCountBeforeKokoro: number;
 
-    it('drain events before Kokoro pipeline', async () => {
-      await new Promise((r) => setTimeout(r, 2000));
+    it('processEvents before Kokoro pipeline contain Message and ChatCompletionJob events', async () => {
+      await waitForQueuesEmpty(60000);
+      assertValidProcessEvents(aliceChatProcessEvents);
+      assertValidProcessEvents(aliceUserProcessEvents);
+      const events = groupByResourceName(aliceChatProcessEvents);
+      expect(events.Message?.length).toBeGreaterThanOrEqual(2);
+      expect(events.ChatCompletionJob?.length).toBeGreaterThanOrEqual(2);
       aliceChatProcessEvents = [];
       aliceUserProcessEvents = [];
+    });
+
+    it('connect stream-player WebSocket for hanaChat TTS streaming', async () => {
+      await connectStreamPlayerWs(hanaChatId);
+      ttsTextMessages = [];
+      ttsBinaryChunks = [];
     });
 
     it('alice enables TTS on hanaChat', async () => {
@@ -577,46 +619,54 @@ export function describeMessages() {
       expect(total).toBeGreaterThanOrEqual(messageCountBeforeKokoro + 2);
     });
 
-    let assistantRomeMessageId: string;
-
     it('ASSISTANT response to audio question contains "Rome"', async () => {
       const { body } = await api('GET', `/messages?chatId=${hanaChatId}`, auth.alice.jwt);
       const assistantMsg = body.data.find((m: any) => m.role === 'ASSISTANT' && m.content?.toLowerCase().includes('rome'));
       expect(assistantMsg).toBeTruthy();
-      assistantRomeMessageId = assistantMsg.id;
     });
 
-    it('ASSISTANT message has TTS audio file generated', async () => {
-      // Poll until the TTS job generates a fileName on the assistant message
-      let fileName: string | null = null;
-      for (let i = 0; i < 25; i++) {
-        await new Promise((r) => setTimeout(r, 1000));
-        const { body } = await api('GET', `/messages/${assistantRomeMessageId}`, auth.alice.jwt);
-        fileName = body.fileName;
-        if (fileName) break;
-      }
-      expect(fileName).toBeTruthy();
-      expect(fileName).toMatch(/\.mp3$/);
-    });
-
-    it('ASSISTANT audio is downloadable', async () => {
-      const res = await fetch(`${BASE_URL}/messages/${assistantRomeMessageId}/audio`, {
-        headers: { Authorization: `Bearer ${auth.alice.jwt}` },
+    it('streams ASSISTANT TTS audio via stream-player WebSocket', async () => {
+      // Wait for tts_end to arrive via WebSocket
+      await new Promise<void>((resolve, reject) => {
+        if (ttsTextMessages.find((m) => m.type === 'tts_end')) return resolve();
+        const checkInterval = 100;
+        const maxWait = 30000;
+        let elapsed = 0;
+        const interval = setInterval(() => {
+          elapsed += checkInterval;
+          if (ttsTextMessages.find((m) => m.type === 'tts_end')) {
+            clearInterval(interval);
+            resolve();
+          } else if (elapsed >= maxWait) {
+            clearInterval(interval);
+            reject(new Error('Timed out waiting for tts_end WebSocket message'));
+          }
+        }, checkInterval);
       });
-      expect(res.status).toBe(200);
-      expect(res.headers.get('content-type')).toBe('audio/mpeg');
-      const buffer = await res.arrayBuffer();
-      expect(buffer.byteLength).toBeGreaterThan(1000);
+
+      const ttsStart = ttsTextMessages.find((m) => m.type === 'tts_start');
+      const ttsEnd = ttsTextMessages.find((m) => m.type === 'tts_end');
+      expect(ttsStart).toBeDefined();
+      expect(ttsStart.messageId).toBeDefined();
+      expect(ttsStart.format).toBe('mp3');
+      expect(ttsEnd).toBeDefined();
+      expect(ttsEnd.messageId).toBe(ttsStart.messageId);
+
+      const totalBytes = ttsBinaryChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+      expect(totalBytes).toBeGreaterThan(0);
+      expect(ttsBinaryChunks.length).toBeGreaterThanOrEqual(1);
+
+      lastTtsMp3Buffer = Buffer.concat(ttsBinaryChunks);
+      ttsTextMessages = [];
+      ttsBinaryChunks = [];
     });
 
-    it('Whisper transcription of ASSISTANT audio contains "Rome"', async () => {
-      const audioRes = await fetch(`${BASE_URL}/messages/${assistantRomeMessageId}/audio`, {
-        headers: { Authorization: `Bearer ${auth.alice.jwt}` },
-      });
-      const audioBuffer = await audioRes.arrayBuffer();
+    it('Whisper transcription of streamed ASSISTANT audio contains "Rome"', async () => {
+      expect(lastTtsMp3Buffer).not.toBeNull();
+      expect(lastTtsMp3Buffer!.length).toBeGreaterThan(0);
 
       const formData = new FormData();
-      formData.append('audio_file', new File([audioBuffer], 'assistant.mp3', { type: 'audio/mpeg' }));
+      formData.append('audio_file', new File([new Uint8Array(lastTtsMp3Buffer!)], 'assistant.mp3', { type: 'audio/mpeg' }));
 
       const whisperRes = await fetch(`${WHISPER_URL}/asr?encode=true&task=transcribe&output=json&language=en`, {
         method: 'POST',
@@ -632,7 +682,7 @@ export function describeMessages() {
 
     it('aliceChatProcessEvents contains Message, SttJob, ChatCompletionJob, and TtsJob events', async () => {
       // Wait for any remaining events to arrive
-      await waitForEvents<ProcessEvent>(aliceChatProcessEvents, 6, 10000);
+      await waitForQueuesEmpty(60000);
       const events = groupByResourceName(aliceChatProcessEvents);
 
       // USER audio message created
@@ -657,6 +707,7 @@ export function describeMessages() {
     // ─── MQTT cleanup ─────────────────────────────────────────
 
     it('close alice MQTT client for messages', () => {
+      streamPlayerWs?.close();
       aliceMqttClient?.end();
     });
   });

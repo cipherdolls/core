@@ -1,5 +1,5 @@
 
-import { auth, api, get, connectMqtt, waitForEvents, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
+import { auth, api, get, connectMqtt, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
 import { chatModelId } from './chatModels';
 import { embeddingModelId } from './embeddingModels';
 import { reasoningModelId } from './reasoningModels';
@@ -36,13 +36,13 @@ export function describeScenarios() {
     });
 
     it('aliceUserProcessEvents contains 0 Events initially', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 0);
+      await waitForQueuesEmpty(60000);
       expect(aliceUserProcessEvents.length).toBe(0);
       aliceUserProcessEvents = [];
     });
 
     it('bobUserProcessEvents contains 0 Events initially', async () => {
-      await waitForEvents<ProcessEvent>(bobUserProcessEvents, 0);
+      await waitForQueuesEmpty(60000);
       expect(bobUserProcessEvents.length).toBe(0);
       bobUserProcessEvents = [];
     });
@@ -133,7 +133,7 @@ export function describeScenarios() {
     });
 
     it('aliceUserProcessEvents contains >= 2 Events after notWorking create', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(aliceUserProcessEvents);
       const scenarios = processEvents.Scenario || [];
       expect(scenarios.length).toBeGreaterThanOrEqual(2);
@@ -165,7 +165,7 @@ export function describeScenarios() {
     });
 
     it('aliceUserProcessEvents contains >= 2 Events after SmallTalk create', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(aliceUserProcessEvents);
       const scenarios = processEvents.Scenario || [];
       expect(scenarios.length).toBeGreaterThanOrEqual(2);
@@ -205,7 +205,7 @@ export function describeScenarios() {
     });
 
     it('aliceUserProcessEvents contains >= 2 Events after dollarPerMessage change', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(aliceUserProcessEvents);
       const scenarios = processEvents.Scenario || [];
       expect(scenarios.length).toBeGreaterThanOrEqual(2);
@@ -228,7 +228,7 @@ export function describeScenarios() {
     });
 
     it('aliceUserProcessEvents contains >= 2 Events after dollarPerMessage reset', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(aliceUserProcessEvents);
       const scenarios = processEvents.Scenario || [];
       expect(scenarios.length).toBeGreaterThanOrEqual(2);
@@ -276,7 +276,7 @@ export function describeScenarios() {
     });
 
     it('bobUserProcessEvents contains >= 2 Events after DeepTalk create', async () => {
-      await waitForEvents<ProcessEvent>(bobUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(bobUserProcessEvents);
       const scenarios = processEvents.Scenario || [];
       expect(scenarios.length).toBeGreaterThanOrEqual(2);
@@ -341,7 +341,7 @@ export function describeScenarios() {
     });
 
     it('bobUserProcessEvents contains >= 2 Events after publish', async () => {
-      await waitForEvents<ProcessEvent>(bobUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(bobUserProcessEvents);
       const scenarios = processEvents.Scenario || [];
       expect(scenarios.length).toBeGreaterThanOrEqual(2);
@@ -484,7 +484,7 @@ export function describeScenarios() {
     });
 
     it('aliceUserProcessEvents contains >= 2 Events after delete', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(aliceUserProcessEvents);
       const scenarios = processEvents.Scenario || [];
       expect(scenarios.length).toBeGreaterThanOrEqual(2);
@@ -545,7 +545,7 @@ export function describeScenarios() {
     });
 
     it('aliceUserProcessEvents contains >= 2 Events after creating scenario without models', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       expect(aliceUserProcessEvents.length).toBeGreaterThanOrEqual(2);
       aliceUserProcessEvents = [];
     });
@@ -566,7 +566,7 @@ export function describeScenarios() {
     });
 
     it('aliceUserProcessEvents contains >= 2 Events after clearing models', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       expect(aliceUserProcessEvents.length).toBeGreaterThanOrEqual(2);
       aliceUserProcessEvents = [];
     });
@@ -582,7 +582,7 @@ export function describeScenarios() {
     });
 
     it('aliceUserProcessEvents contains >= 2 Events after restoring models', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       expect(aliceUserProcessEvents.length).toBeGreaterThanOrEqual(2);
       aliceUserProcessEvents = [];
     });
@@ -610,7 +610,7 @@ export function describeScenarios() {
     });
 
     it('aliceUserProcessEvents contains >= 2 Events after alien scenario create', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       expect(aliceUserProcessEvents.length).toBeGreaterThanOrEqual(2);
       aliceUserProcessEvents = [];
     });

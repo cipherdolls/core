@@ -1,5 +1,5 @@
 
-import { auth, api, get, connectMqtt, subscribeTopic, waitForEvents, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
+import { auth, api, get, connectMqtt, subscribeTopic, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
 
 // Module-level IDs for cross-test imports
 export let heartVoiceId: string;
@@ -47,7 +47,7 @@ export function describeTtsVoices() {
     // ─── MQTT: events after Heart create (wrong providerVoiceId) ─
 
     it('adminUserProcessEvents contains >= 2 ttsVoice Events after Heart create', async () => {
-      await waitForEvents(adminUserProcessEvents, 2, 30000);
+      await waitForQueuesEmpty(60000);
       const events = groupByResourceName(adminUserProcessEvents);
       const ttsVoice = events.TtsVoice || [];
       expect(ttsVoice.length).toBeGreaterThanOrEqual(2);
@@ -92,7 +92,7 @@ export function describeTtsVoices() {
     // ─── MQTT: events after Heart providerVoiceId update ────────
 
     it('adminUserProcessEvents contains 2 ttsVoice Events after providerVoiceId update', async () => {
-      await waitForEvents(adminUserProcessEvents, 2, 30000);
+      await waitForQueuesEmpty(60000);
       const events = groupByResourceName(adminUserProcessEvents);
       const ttsVoice = events.TtsVoice || [];
       expect(ttsVoice.length).toBe(2);
@@ -133,8 +133,10 @@ export function describeTtsVoices() {
     });
 
     // no process event for gender update (not in scalarFields)
-    it('drain adminUserProcessEvents after gender update', async () => {
-      await new Promise((resolve) => setTimeout(resolve, 500));
+    it('processEvents after gender update contain TtsVoice events', async () => {
+      await waitForQueuesEmpty(60000);
+      const events = groupByResourceName(adminUserProcessEvents);
+      expect(events.TtsVoice?.length).toBeGreaterThanOrEqual(2);
       adminUserProcessEvents = [];
     });
 
@@ -212,7 +214,7 @@ export function describeTtsVoices() {
     // ─── MQTT: events after Bella create ────────────────────────
 
     it('adminUserProcessEvents contains >= 2 ttsVoice Events after Bella create', async () => {
-      await waitForEvents(adminUserProcessEvents, 2, 30000);
+      await waitForQueuesEmpty(60000);
       const events = groupByResourceName(adminUserProcessEvents);
       const ttsVoice = events.TtsVoice || [];
       expect(ttsVoice.length).toBeGreaterThanOrEqual(2);
@@ -243,7 +245,7 @@ export function describeTtsVoices() {
     // ─── MQTT: events after Nicole create ───────────────────────
 
     it('adminUserProcessEvents contains >= 2 ttsVoice Events after Nicole create', async () => {
-      await waitForEvents(adminUserProcessEvents, 2, 30000);
+      await waitForQueuesEmpty(60000);
       const events = groupByResourceName(adminUserProcessEvents);
       const ttsVoice = events.TtsVoice || [];
       expect(ttsVoice.length).toBeGreaterThanOrEqual(2);
@@ -421,7 +423,7 @@ export function describeTtsVoices() {
     // ─── MQTT: events after Adam create ─────────────────────────
 
     it('adminUserProcessEvents contains >= 2 ttsVoice Events after Adam create', async () => {
-      await waitForEvents(adminUserProcessEvents, 2, 30000);
+      await waitForQueuesEmpty(60000);
       const events = groupByResourceName(adminUserProcessEvents);
       const ttsVoice = events.TtsVoice || [];
       expect(ttsVoice.length).toBeGreaterThanOrEqual(2);

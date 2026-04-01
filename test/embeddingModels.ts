@@ -1,5 +1,5 @@
 
-import { auth, api, get, connectMqtt, waitForEvents, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
+import { auth, api, get, connectMqtt, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
 
 // Module-level ID for cross-test imports
 export let embeddingModelId: string;
@@ -51,7 +51,7 @@ export function describeEmbeddingModels() {
     });
 
     it('adminUserProcessEvents contains 2 EmbeddingModel Events', async () => {
-      await waitForEvents(adminUserProcessEvents, 2, 30000);
+      await waitForQueuesEmpty(60000);
       const events = groupByResourceName(adminUserProcessEvents);
       const embeddingModelEvents = events.EmbeddingModel || [];
       expect(embeddingModelEvents.length).toBe(2);

@@ -1,5 +1,5 @@
 
-import { auth, api, get, connectMqtt, waitForEvents, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
+import { auth, api, get, connectMqtt, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
 
 export function describeFillerWords() {
   describe('fillerWords Controller (e2e)', () => {
@@ -51,7 +51,7 @@ export function describeFillerWords() {
     });
 
     it('aliceUserProcessEvents contains 4 Events (created active+completed, then updated active+completed) for FillerWord', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 4, 30000);
+      await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(aliceUserProcessEvents);
       const fillerWord = processEvents.FillerWord || [];
       expect(fillerWord.length).toBe(4);
@@ -90,7 +90,7 @@ export function describeFillerWords() {
     });
 
     it('aliceUserProcessEvents contains 8 Events for 2 new filler words', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 8, 30000);
+      await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(aliceUserProcessEvents);
       const fillerWord = processEvents.FillerWord || [];
       expect(fillerWord.length).toBe(8);
@@ -133,7 +133,7 @@ export function describeFillerWords() {
     });
 
     it('aliceUserProcessEvents contains 4 Events for update (text change active+completed, then fileName change active+completed)', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 4, 30000);
+      await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(aliceUserProcessEvents);
       const fillerWord = processEvents.FillerWord || [];
       expect(fillerWord.length).toBe(4);

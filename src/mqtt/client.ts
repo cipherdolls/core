@@ -1,4 +1,5 @@
 import mqtt, { MqttClient } from 'mqtt';
+import { Decimal } from '@prisma/client/runtime/library';
 import type { ProcessEvent, ActionEvent } from './types';
 
 let client: MqttClient;
@@ -32,7 +33,51 @@ export function startMqttClient() {
 
 export function publish(topic: string, event: ProcessEvent | ActionEvent): void {
   if (!client) return;
-  client.publish(topic, JSON.stringify(event));
+  client.publish(topic, JSON.stringify(event, (_key, value) => {
+    if (value instanceof Decimal) return value.toNumber();
+    return value;
+  }));
+}
+
+/**
+ * Convert Prisma Decimal values (both instances and deserialized { s, e, d } objects)
+ * to plain numbers so they serialize correctly over MQTT.
+ *
+ * decimal.js internal format: s=sign(1/-1), e=exponent, d=digits array (base 1e7)
+ * e.g. { s:1, e:0, d:[3,9914350] } → 3.9914350
+ */
+function sanitizeAttributes(attrs?: Record<string, any>): Record<string, any> | undefined {
+  if (!attrs) return attrs;
+  const result: Record<string, any> = {};
+  for (const [key, value] of Object.entries(attrs)) {
+    if (value instanceof Decimal) {
+      result[key] = value.toNumber();
+    } else if (
+      value !== null &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      typeof value.s === 'number' &&
+      typeof value.e === 'number' &&
+      Array.isArray(value.d)
+    ) {
+      const digits = value.d
+        .map((n: number, i: number) => (i === 0 ? String(n) : String(n).padStart(7, '0')))
+        .join('');
+      const intDigits = value.e + 1;
+      let numStr: string;
+      if (intDigits >= digits.length) {
+        numStr = digits + '0'.repeat(intDigits - digits.length);
+      } else if (intDigits <= 0) {
+        numStr = '0.' + '0'.repeat(-intDigits) + digits;
+      } else {
+        numStr = digits.slice(0, intDigits) + '.' + digits.slice(intDigits);
+      }
+      result[key] = value.s * Number(numStr);
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
 }
 
 export function publishProcessEvent(params: {
@@ -50,7 +95,7 @@ export function publishProcessEvent(params: {
     jobName: params.jobName,
     jobId: params.jobId,
     jobStatus: params.jobStatus ?? 'active',
-    resourceAttributes: params.resourceAttributes,
+    resourceAttributes: sanitizeAttributes(params.resourceAttributes),
   };
 
   const topics: string[] = [];

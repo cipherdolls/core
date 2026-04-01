@@ -1,5 +1,5 @@
 
-import { auth, api, get, connectMqtt, subscribeTopic, waitForEvents, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient, MQTT_URL } from './helpers';
+import { auth, api, get, connectMqtt, subscribeTopic, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient, MQTT_URL } from './helpers';
 
 // Module-level ID for cross-test imports
 export let chatModelId: string;
@@ -54,7 +54,7 @@ export function describeChatModels() {
     });
 
     it('adminUserProcessEvents contains 2 ChatModel Events', async () => {
-      await waitForEvents(adminUserProcessEvents, 2, 30000);
+      await waitForQueuesEmpty(60000);
       const events = groupByResourceName(adminUserProcessEvents);
       const chatModelEvents = events.ChatModel || [];
       expect(chatModelEvents.length).toBe(2);

@@ -1,5 +1,5 @@
 
-import { auth, api, get, connectMqtt, subscribeTopic, waitForEvents, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
+import { auth, api, get, connectMqtt, subscribeTopic, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
 
 // Module-level IDs for cross-test imports
 export let kokoroProviderId: string;
@@ -99,7 +99,7 @@ export function describeTtsProviders() {
     // ─── MQTT: events after Kokoro create ──────────────────────
 
     it('adminUserProcessEvents contains 2 Events after Kokoro create', async () => {
-      await waitForEvents(adminUserProcessEvents, 2, 30000);
+      await waitForQueuesEmpty(60000);
       const events = groupByResourceName(adminUserProcessEvents);
       const ttsProviders = events.TtsProvider || [];
       expect(ttsProviders.length).toBe(2);
@@ -216,7 +216,7 @@ export function describeTtsProviders() {
     // ─── MQTT: events after Kokoro update ──────────────────────
 
     it('adminUserProcessEvents contains 2 Events after Kokoro update', async () => {
-      await waitForEvents(adminUserProcessEvents, 2, 30000);
+      await waitForQueuesEmpty(60000);
       const events = groupByResourceName(adminUserProcessEvents);
       const ttsProviders = events.TtsProvider || [];
       expect(ttsProviders.length).toBe(2);
@@ -249,7 +249,7 @@ export function describeTtsProviders() {
     // ─── MQTT: events after ElevenLabs create ──────────────────
 
     it('adminUserProcessEvents contains 2 Events after ElevenLabs create', async () => {
-      await waitForEvents(adminUserProcessEvents, 2, 30000);
+      await waitForQueuesEmpty(60000);
       const events = groupByResourceName(adminUserProcessEvents);
       const ttsProviders = events.TtsProvider || [];
       expect(ttsProviders.length).toBe(2);
@@ -329,7 +329,7 @@ export function describeTtsProviders() {
     // ─── MQTT: events after ElevenLabs delete ──────────────────
 
     it('adminUserProcessEvents contains 2 Events after ElevenLabs delete', async () => {
-      await waitForEvents(adminUserProcessEvents, 2, 30000);
+      await waitForQueuesEmpty(60000);
       const events = groupByResourceName(adminUserProcessEvents);
       const ttsProviders = events.TtsProvider || [];
       expect(ttsProviders.length).toBe(2);

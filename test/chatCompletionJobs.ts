@@ -1,5 +1,5 @@
 
-import { auth, api, connectMqtt, waitForEvents, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
+import { auth, api, connectMqtt, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
 import { hanaChatId } from './chats';
 
 export function describeChatCompletionJobs() {
@@ -65,9 +65,9 @@ export function describeChatCompletionJobs() {
       expect(status).toBe(200);
     });
 
-    it('drain events before posting', async () => {
-      await new Promise((r) => setTimeout(r, 2000));
-      aliceChatProcessEvents = [];
+    it('queues are empty before posting', async () => {
+      await waitForQueuesEmpty(60000);
+      expect(aliceChatProcessEvents.length).toBe(0);
     });
 
     it('alice posts a message to trigger broken chat completion', async () => {
@@ -80,7 +80,7 @@ export function describeChatCompletionJobs() {
     });
 
     it('aliceChatProcessEvents contains events after broken message', async () => {
-      await waitForEvents<ProcessEvent>(aliceChatProcessEvents, 2, 30000);
+      await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(aliceChatProcessEvents);
       const chatCompletionJobs = processEvents.ChatCompletionJob || [];
       expect(chatCompletionJobs.length).toBeGreaterThanOrEqual(1);

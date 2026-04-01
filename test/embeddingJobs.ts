@@ -1,5 +1,5 @@
 
-import { auth, api, get, connectMqtt, waitForEvents, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
+import { auth, api, get, connectMqtt, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
 import { hanaChatId } from './chats';
 
 export function describeEmbeddingJobs() {
@@ -68,9 +68,9 @@ export function describeEmbeddingJobs() {
 
     // ─── Drain events ───────────────────────────────────────────
 
-    it('drain late events from previous modules', async () => {
-      await new Promise((r) => setTimeout(r, 2000));
-      aliceChatProcessEvents = [];
+    it('queues are empty before embedding jobs tests', async () => {
+      await waitForQueuesEmpty(60000);
+      expect(aliceChatProcessEvents.length).toBe(0);
     });
 
     // ─── Post message that will fail embedding ──────────────────

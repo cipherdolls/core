@@ -1,5 +1,5 @@
 
-import { auth, api, get, connectMqtt, waitForEvents, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient, BASE_URL } from './helpers';
+import { auth, api, get, connectMqtt, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient, BASE_URL } from './helpers';
 
 export function describeSponsorships() {
   describe('Sponsorships', () => {
@@ -88,7 +88,7 @@ export function describeSponsorships() {
     });
 
     it('aliceUserProcessEvents contains >= 2 Events after sponsorship create', async () => {
-      await waitForEvents(aliceUserProcessEvents, 2, 10000);
+      await waitForQueuesEmpty(60000);
       const events = groupByResourceName(aliceUserProcessEvents);
       const sponsorshipEvents = events.Sponsorship || [];
       expect(sponsorshipEvents.length).toBeGreaterThanOrEqual(2);
@@ -200,7 +200,7 @@ export function describeSponsorships() {
     });
 
     it('aliceUserProcessEvents contains >= 2 Events after sponsorship delete', async () => {
-      await waitForEvents(aliceUserProcessEvents, 2, 10000);
+      await waitForQueuesEmpty(60000);
       const events = groupByResourceName(aliceUserProcessEvents);
       const sponsorshipEvents = events.Sponsorship || [];
       expect(sponsorshipEvents.length).toBeGreaterThanOrEqual(2);

@@ -1,5 +1,5 @@
 
-import { auth, api, get, connectMqtt, waitForEvents, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
+import { auth, api, get, connectMqtt, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
 
 // Module-level ID for cross-test imports
 export let reasoningModelId: string;
@@ -53,7 +53,7 @@ export function describeReasoningModels() {
     });
 
     it('adminUserProcessEvents contains 2 ReasoningModel Events', async () => {
-      await waitForEvents(adminUserProcessEvents, 2, 30000);
+      await waitForQueuesEmpty(60000);
       const events = groupByResourceName(adminUserProcessEvents);
       const reasoningModelEvents = events.ReasoningModel || [];
       expect(reasoningModelEvents.length).toBe(2);

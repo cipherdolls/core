@@ -1,4 +1,4 @@
-import { auth, api, get, wallets, connectMqtt, waitForEvents, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient, BASE_URL } from './helpers';
+import { auth, api, get, wallets, connectMqtt, waitForQueuesEmpty, assertValidProcessEvents, groupByResourceName, type ProcessEvent, type MqttClient, BASE_URL } from './helpers';
 import { joiAvatarId } from './avatars';
 
 export let hanaChatId: string;
@@ -64,12 +64,12 @@ export function describeChats() {
 
     // ─── Drain late events from previous modules ────────────────
 
-    it('drain late events from previous modules', async () => {
-      await new Promise((r) => setTimeout(r, 2000));
-      aliceUserProcessEvents = [];
-      aliceChatProcessEvents = [];
-      bobUserProcessEvents = [];
-      bobChatProcessEvents = [];
+    it('queues are empty before chats tests', async () => {
+      await waitForQueuesEmpty(60000);
+      expect(aliceUserProcessEvents.length).toBe(0);
+      expect(aliceChatProcessEvents.length).toBe(0);
+      expect(bobUserProcessEvents.length).toBe(0);
+      expect(bobChatProcessEvents.length).toBe(0);
     });
 
     // ─── Resolve seed data ──────────────────────────────────────
@@ -291,8 +291,10 @@ export function describeChats() {
       expect(status).toBe(200);
     });
 
-    it('drain events after token enforcement tests', async () => {
-      await new Promise((r) => setTimeout(r, 2000));
+    it('processEvents after token enforcement tests', async () => {
+      await waitForQueuesEmpty(60000);
+      assertValidProcessEvents(aliceUserProcessEvents);
+      assertValidProcessEvents(aliceChatProcessEvents);
       aliceUserProcessEvents = [];
       aliceChatProcessEvents = [];
       bobUserProcessEvents = [];
@@ -324,8 +326,11 @@ export function describeChats() {
       aliceMqttClient.subscribe(`chats/${hanaChatId}/processEvents`);
     });
 
-    it('drain aliceChatProcessEvents after hana chat creation', async () => {
-      await new Promise(r => setTimeout(r, 1000));
+    it('aliceChatProcessEvents after hana chat creation', async () => {
+      await waitForQueuesEmpty(60000);
+      expect(aliceChatProcessEvents.length).toBeGreaterThan(0);
+      const events = groupByResourceName(aliceChatProcessEvents);
+      expect(events.Chat).toBeDefined();
       aliceChatProcessEvents = [];
     });
 
@@ -486,7 +491,7 @@ export function describeChats() {
     });
 
     it('aliceChatProcessEvents after hana chat update', async () => {
-      await waitForEvents(aliceChatProcessEvents, 2, 15000);
+      await waitForQueuesEmpty(60000);
       const events = groupByResourceName(aliceChatProcessEvents);
       const chatEvents = events.Chat || [];
       expect(chatEvents.length).toBeGreaterThanOrEqual(2);
@@ -545,8 +550,11 @@ export function describeChats() {
       aliceUserProcessEvents = [];
     });
 
-    it('drain aliceChatProcessEvents after joi chat creation', async () => {
-      await new Promise(r => setTimeout(r, 1000));
+    it('aliceChatProcessEvents after joi chat creation', async () => {
+      await waitForQueuesEmpty(60000);
+      expect(aliceChatProcessEvents.length).toBeGreaterThan(0);
+      const events = groupByResourceName(aliceChatProcessEvents);
+      expect(events.Chat).toBeDefined();
       aliceChatProcessEvents = [];
     });
 
@@ -626,8 +634,11 @@ export function describeChats() {
       bobUserProcessEvents = [];
     });
 
-    it('drain bobChatProcessEvents after freya chat creation', async () => {
-      await new Promise(r => setTimeout(r, 1000));
+    it('bobChatProcessEvents after freya chat creation', async () => {
+      await waitForQueuesEmpty(60000);
+      expect(bobChatProcessEvents.length).toBeGreaterThan(0);
+      const events = groupByResourceName(bobChatProcessEvents);
+      expect(events.Chat).toBeDefined();
       bobChatProcessEvents = [];
     });
 
@@ -746,7 +757,7 @@ export function describeChats() {
     });
 
     it('aliceChatProcessEvents after customJoiChat creation', async () => {
-      await waitForEvents(aliceChatProcessEvents, 2, 15000);
+      await waitForQueuesEmpty(60000);
       const events = groupByResourceName(aliceChatProcessEvents);
       const chatEvents = events.Chat || [];
       expect(chatEvents.length).toBeGreaterThanOrEqual(2);
@@ -759,7 +770,7 @@ export function describeChats() {
     });
 
     it('aliceChatProcessEvents after custom joiChat delete', async () => {
-      await waitForEvents(aliceChatProcessEvents, 2, 15000);
+      await waitForQueuesEmpty(60000);
       const events = groupByResourceName(aliceChatProcessEvents);
       const chatEvents = events.Chat || [];
       expect(chatEvents.length).toBeGreaterThanOrEqual(2);
@@ -904,8 +915,11 @@ export function describeChats() {
       aliceUserProcessEvents = [];
     });
 
-    it('drain aliceChatProcessEvents after alien chat creation', async () => {
-      await new Promise(r => setTimeout(r, 1000));
+    it('aliceChatProcessEvents after alien chat creation', async () => {
+      await waitForQueuesEmpty(60000);
+      expect(aliceChatProcessEvents.length).toBeGreaterThan(0);
+      const events = groupByResourceName(aliceChatProcessEvents);
+      expect(events.Chat).toBeDefined();
       aliceChatProcessEvents = [];
     });
 

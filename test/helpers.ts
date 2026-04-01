@@ -13,8 +13,10 @@ const REDIS_PORT = parseInt(process.env.REDIS_PORT ?? '6379');
  * Wait until all BullMQ queues in Redis are empty (no waiting, active, or delayed jobs)
  * AND stay empty for `settleMs` to avoid false positives when one job completes
  * and immediately enqueues the next (e.g. STT → chatCompletion).
+ * After queues are confirmed empty, waits an additional `mqttPropagationMs`
+ * for MQTT events to be delivered to subscribers.
  */
-export async function waitForQueuesEmpty(timeout = 30000, settleMs = 1000): Promise<void> {
+export async function waitForQueuesEmpty(timeout = 30000, settleMs = 1000, mqttPropagationMs = 500): Promise<void> {
   const redis = new IORedis(REDIS_PORT, REDIS_HOST, { maxRetriesPerRequest: null });
   const interval = 200;
   let elapsed = 0;
@@ -35,7 +37,10 @@ export async function waitForQueuesEmpty(timeout = 30000, settleMs = 1000): Prom
 
       if (totalJobs === 0) {
         emptyFor += interval;
-        if (emptyFor >= settleMs) return;
+        if (emptyFor >= settleMs) {
+          await new Promise((r) => setTimeout(r, mqttPropagationMs));
+          return;
+        }
       } else {
         emptyFor = 0;
       }
@@ -46,6 +51,37 @@ export async function waitForQueuesEmpty(timeout = 30000, settleMs = 1000): Prom
     throw new Error(`Queues not empty after ${timeout}ms`);
   } finally {
     redis.disconnect();
+  }
+}
+
+/**
+ * Wait until a queue array has at least `expectedCount` items.
+ * Use this for events produced outside BullMQ (e.g. blockchain watcher).
+ * Prefer waitForQueuesEmpty for BullMQ-driven events.
+ */
+export function waitForEvents<T>(queue: T[], expectedCount: number, timeout = 30000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const interval = 100;
+    let elapsed = 0;
+    const timer = setInterval(() => {
+      if (queue.length >= expectedCount) { clearInterval(timer); resolve(); }
+      elapsed += interval;
+      if (elapsed >= timeout) { clearInterval(timer); reject(new Error(`Timed out waiting for ${expectedCount} events, got ${queue.length}`)); }
+    }, interval);
+  });
+}
+
+const VALID_JOB_STATUSES = new Set(['active', 'completed', 'failed', 'retrying']);
+
+/**
+ * Assert that every ProcessEvent in the array has a valid structure.
+ * Call before clearing event arrays to ensure nothing was silently dropped or malformed.
+ */
+export function assertValidProcessEvents(events: ProcessEvent[]): void {
+  for (const e of events) {
+    if (!e.resourceName || typeof e.resourceName !== 'string') throw new Error(`Invalid resourceName: ${JSON.stringify(e)}`);
+    if (!e.resourceId) throw new Error(`Missing resourceId: ${JSON.stringify(e)}`);
+    if (!VALID_JOB_STATUSES.has(e.jobStatus)) throw new Error(`Invalid jobStatus "${e.jobStatus}": ${JSON.stringify(e)}`);
   }
 }
 
@@ -148,18 +184,6 @@ export function subscribeTopic(client: MqttClient, topic: string): ProcessEvent[
     }
   });
   return events;
-}
-
-export function waitForEvents<T>(queue: T[], expectedCount: number, timeout = 30000): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const interval = 100;
-    let elapsed = 0;
-    const timer = setInterval(() => {
-      if (queue.length >= expectedCount) { clearInterval(timer); resolve(); }
-      elapsed += interval;
-      if (elapsed >= timeout) { clearInterval(timer); reject(new Error(`Timed out waiting for ${expectedCount} events, got ${queue.length}`)); }
-    }, interval);
-  });
 }
 
 export function groupByResourceName(events: ProcessEvent[]): Record<string, ProcessEvent[]> {

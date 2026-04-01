@@ -1,5 +1,5 @@
 
-import { auth, api, get, connectMqtt, waitForEvents, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
+import { auth, api, get, connectMqtt, waitForQueuesEmpty, assertValidProcessEvents, groupByResourceName, type ProcessEvent, type MqttClient } from './helpers';
 
 export let hanaAvatarId: string;
 export let freyaAvatarId: string;
@@ -32,13 +32,13 @@ export function describeAvatars() {
     });
 
     it('aliceUserProcessEvents contains 0 Events initially', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 0);
+      await waitForQueuesEmpty(60000);
       expect(aliceUserProcessEvents.length).toBe(0);
       aliceUserProcessEvents = [];
     });
 
     it('bobUserProcessEvents contains 0 Events initially', async () => {
-      await waitForEvents<ProcessEvent>(bobUserProcessEvents, 0);
+      await waitForQueuesEmpty(60000);
       expect(bobUserProcessEvents.length).toBe(0);
       bobUserProcessEvents = [];
     });
@@ -126,7 +126,7 @@ export function describeAvatars() {
     });
 
     it('aliceUserProcessEvents contains >= 2 Avatar events after hana create', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(aliceUserProcessEvents);
       const avatar = processEvents.Avatar || [];
       expect(avatar.length).toBeGreaterThanOrEqual(2);
@@ -180,7 +180,7 @@ export function describeAvatars() {
     });
 
     it('aliceUserProcessEvents contains >= 2 Avatar events after freya create', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(aliceUserProcessEvents);
       const avatar = processEvents.Avatar || [];
       expect(avatar.length).toBeGreaterThanOrEqual(2);
@@ -212,7 +212,7 @@ export function describeAvatars() {
     });
 
     it('aliceUserProcessEvents contains 2 Events after freya voice update', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       expect(aliceUserProcessEvents.length).toBe(2);
       aliceUserProcessEvents = [];
     });
@@ -248,7 +248,7 @@ export function describeAvatars() {
     });
 
     it('bobUserProcessEvents contains >= 2 Avatar events after joi create', async () => {
-      await waitForEvents<ProcessEvent>(bobUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(bobUserProcessEvents);
       const avatar = processEvents.Avatar || [];
       expect(avatar.length).toBeGreaterThanOrEqual(2);
@@ -292,7 +292,7 @@ export function describeAvatars() {
     });
 
     it('aliceUserProcessEvents contains 2 Events after hana publish', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       expect(aliceUserProcessEvents.length).toBe(2);
       aliceUserProcessEvents = [];
     });
@@ -324,7 +324,7 @@ export function describeAvatars() {
     });
 
     it('aliceUserProcessEvents contains 2 Events after freya publish', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       expect(aliceUserProcessEvents.length).toBe(2);
       aliceUserProcessEvents = [];
     });
@@ -525,7 +525,7 @@ export function describeAvatars() {
     });
 
     it('aliceUserProcessEvents contains 2 Events after hana recommended', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       expect(aliceUserProcessEvents.length).toBe(2);
       aliceUserProcessEvents = [];
     });
@@ -570,7 +570,7 @@ export function describeAvatars() {
     });
 
     it('aliceUserProcessEvents contains 2 Events after hana unrecommended', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       expect(aliceUserProcessEvents.length).toBe(2);
       aliceUserProcessEvents = [];
     });
@@ -619,8 +619,9 @@ export function describeAvatars() {
       expect(body.scenarios).toHaveLength(1);
     });
 
-    it('drain aliceUserProcessEvents after freya scenario update', async () => {
-      await new Promise(r => setTimeout(r, 1000));
+    it('processEvents after freya scenario update contain Scenario events', async () => {
+      await waitForQueuesEmpty(60000);
+      assertValidProcessEvents(aliceUserProcessEvents);
       aliceUserProcessEvents = [];
     });
 
@@ -695,8 +696,10 @@ export function describeAvatars() {
       expect(body).toHaveProperty('name', 'Alice Private Nested');
     });
 
-    it('drain aliceUserProcessEvents after private scenario create', async () => {
-      await new Promise((r) => setTimeout(r, 1000));
+    it('processEvents after private scenario create contain Scenario events', async () => {
+      await waitForQueuesEmpty(60000);
+      const events = groupByResourceName(aliceUserProcessEvents);
+      expect(events.Scenario?.length).toBeGreaterThanOrEqual(2);
       aliceUserProcessEvents = [];
     });
 
@@ -714,8 +717,9 @@ export function describeAvatars() {
       expect(body.scenarios).toHaveLength(2);
     });
 
-    it('drain aliceUserProcessEvents after hana scenario update', async () => {
-      await new Promise(r => setTimeout(r, 1000));
+    it('processEvents after hana scenario update contain Avatar events', async () => {
+      await waitForQueuesEmpty(60000);
+      assertValidProcessEvents(aliceUserProcessEvents);
       aliceUserProcessEvents = [];
     });
 
@@ -792,8 +796,9 @@ export function describeAvatars() {
       expect(body.scenarios).toHaveLength(1);
     });
 
-    it('drain aliceUserProcessEvents after hana revert', async () => {
-      await new Promise(r => setTimeout(r, 1000));
+    it('processEvents after hana revert contain Avatar events', async () => {
+      await waitForQueuesEmpty(60000);
+      assertValidProcessEvents(aliceUserProcessEvents);
       aliceUserProcessEvents = [];
     });
 
@@ -817,7 +822,7 @@ export function describeAvatars() {
     });
 
     it('aliceUserProcessEvents contains 2 Events after final recommend', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       expect(aliceUserProcessEvents.length).toBe(2);
       aliceUserProcessEvents = [];
     });
@@ -846,8 +851,10 @@ export function describeAvatars() {
       expect(chatStatus).toBe(404);
     });
 
-    it('drain events after cascade delete test', async () => {
-      await new Promise((r) => setTimeout(r, 2000));
+    it('processEvents after cascade delete test contain Avatar events', async () => {
+      await waitForQueuesEmpty(60000);
+      const events = groupByResourceName(aliceUserProcessEvents);
+      expect(events.Avatar?.length).toBeGreaterThanOrEqual(2);
       aliceUserProcessEvents = [];
     });
 

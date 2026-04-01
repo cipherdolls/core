@@ -1,4 +1,4 @@
-import { auth, api, get, wallets, connectMqtt, waitForEvents, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient, BASE_URL } from './helpers';
+import { auth, api, get, wallets, connectMqtt, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient, BASE_URL } from './helpers';
 
 export function describeDolls() {
   describe('Dolls', () => {
@@ -103,7 +103,7 @@ export function describeDolls() {
     });
 
     it('aliceUserProcessEvents contains 2 Events after doll1 create', async () => {
-      await waitForEvents(aliceUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       expect(aliceUserProcessEvents.length).toBe(2);
       const processEvents = groupByResourceName(aliceUserProcessEvents);
       const dolls = processEvents.Doll || [];
@@ -174,7 +174,7 @@ export function describeDolls() {
     });
 
     it('aliceUserProcessEvents contains 2 doll Events after doll2 create', async () => {
-      await waitForEvents(aliceUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       expect(aliceUserProcessEvents.length).toBe(2);
       const processEvents = groupByResourceName(aliceUserProcessEvents);
       const dolls = processEvents.Doll || [];
@@ -190,8 +190,10 @@ export function describeDolls() {
       expect(doll1DollProcessEvents.length).toBe(0);
     });
 
-    it('drain doll2DollProcessEvents after creation', async () => {
-      await new Promise(r => setTimeout(r, 1000));
+    it('processEvents after doll2 creation contain Doll events', async () => {
+      await waitForQueuesEmpty(60000);
+      const events = groupByResourceName(aliceUserProcessEvents);
+      expect(events.Doll?.length).toBeGreaterThanOrEqual(2);
       aliceUserProcessEvents = [];
       aliceDollProcessEvents = [];
       doll1DollProcessEvents = [];
@@ -241,8 +243,10 @@ export function describeDolls() {
       freyaChatId = body.id;
     });
 
-    it('drain aliceUserProcessEvents after freya chat creation', async () => {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+    it('processEvents after freya chat creation contain Chat events', async () => {
+      await waitForQueuesEmpty(60000);
+      const events = groupByResourceName(aliceUserProcessEvents);
+      expect(events.Chat?.length).toBeGreaterThanOrEqual(2);
       aliceUserProcessEvents = [];
     });
 
@@ -257,7 +261,7 @@ export function describeDolls() {
     });
 
     it('doll1 gets 2 processEvents', async () => {
-      await waitForEvents(doll1DollProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       expect(doll1DollProcessEvents.length).toBe(2);
       const processEvents = groupByResourceName(doll1DollProcessEvents);
       const dolls = processEvents.Doll || [];
@@ -266,14 +270,17 @@ export function describeDolls() {
     });
 
     it('aliceUserProcessEvents contains 2 Doll Events (doll1 update)', async () => {
-      await waitForEvents(aliceUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(aliceUserProcessEvents);
       const dolls = processEvents.Doll || [];
       expect(dolls.length).toBe(2);
       aliceUserProcessEvents = [];
     });
 
-    it('drain aliceChatProcessEvents (greeting events may have arrived before subscription)', async () => {
+    it('processEvents before doll tests contain Doll events', async () => {
+      await waitForQueuesEmpty(60000);
+      const events = groupByResourceName(aliceDollProcessEvents);
+      expect(events.Doll?.length).toBeGreaterThanOrEqual(1);
       aliceDollProcessEvents = [];
     });
 
@@ -296,24 +303,10 @@ export function describeDolls() {
       expect(status).toBe(200);
     });
 
-    it('drain aliceUserProcessEvents after hanaChat delete', async () => {
-      await new Promise(r => setTimeout(r, 1000));
-      aliceUserProcessEvents = [];
-      aliceDollProcessEvents = [];
-      doll1DollProcessEvents = [];
-      doll2DollProcessEvents = [];
-    });
-
-    it('drain aliceDollProcessEvents after hanaChat delete', async () => {
-      await new Promise(r => setTimeout(r, 1000));
-      aliceUserProcessEvents = [];
-      aliceDollProcessEvents = [];
-      doll1DollProcessEvents = [];
-      doll2DollProcessEvents = [];
-    });
-
-    it('drain doll2DollProcessEvents after hanaChat delete', async () => {
-      await new Promise(r => setTimeout(r, 1000));
+    it('processEvents after hanaChat delete contain Chat events', async () => {
+      await waitForQueuesEmpty(60000);
+      const events = groupByResourceName(aliceUserProcessEvents);
+      expect(events.Chat?.length).toBeGreaterThanOrEqual(2);
       aliceUserProcessEvents = [];
       aliceDollProcessEvents = [];
       doll1DollProcessEvents = [];
@@ -353,7 +346,7 @@ export function describeDolls() {
     });
 
     it('aliceUserProcessEvents contains 2 Doll Events after doll1 delete', async () => {
-      await waitForEvents(aliceUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(aliceUserProcessEvents);
       const dolls = processEvents.Doll || [];
       expect(dolls.length).toBe(2);
@@ -361,13 +354,13 @@ export function describeDolls() {
     });
 
     it('aliceDollProcessEvents contains 2 Events after doll1 delete', async () => {
-      await waitForEvents(aliceDollProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       expect(aliceDollProcessEvents.length).toBe(2);
       aliceDollProcessEvents = [];
     });
 
     it('doll1DollProcessEvents contains 2 Events after doll1 delete', async () => {
-      await waitForEvents(doll1DollProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       expect(doll1DollProcessEvents.length).toBe(2);
       doll1DollProcessEvents = [];
     });
@@ -386,7 +379,7 @@ export function describeDolls() {
     });
 
     it('doll2DollProcessEvents contains 2 Events', async () => {
-      await waitForEvents(doll2DollProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       expect(doll2DollProcessEvents.length).toBe(2);
       const processEvents = groupByResourceName(doll2DollProcessEvents);
       const dolls = processEvents.Doll || [];
@@ -395,7 +388,7 @@ export function describeDolls() {
     });
 
     it('aliceUserProcessEvents contains 2 Doll Events after doll2→freyaChat', async () => {
-      await waitForEvents(aliceUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(aliceUserProcessEvents);
       const dolls = processEvents.Doll || [];
       expect(dolls.length).toBe(2);
@@ -437,7 +430,7 @@ export function describeDolls() {
     });
 
     it('doll2DollProcessEvents contains 2 Events after disconnect', async () => {
-      await waitForEvents(doll2DollProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       expect(doll2DollProcessEvents.length).toBe(2);
       const processEvents = groupByResourceName(doll2DollProcessEvents);
       const dolls = processEvents.Doll || [];
@@ -446,7 +439,7 @@ export function describeDolls() {
     });
 
     it('aliceUserProcessEvents contains 2 Doll Events after doll2 disconnect', async () => {
-      await waitForEvents(aliceUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(aliceUserProcessEvents);
       const dolls = processEvents.Doll || [];
       expect(dolls.length).toBe(2);
@@ -589,8 +582,10 @@ export function describeDolls() {
       expect(body).toHaveProperty('id', doll2Id);
     });
 
-    it('drain aliceUserProcessEvents after doll reassignment back', async () => {
-      await waitForEvents(aliceUserProcessEvents, 2);
+    it('processEvents after doll reassignment back contain Doll events', async () => {
+      await waitForQueuesEmpty(60000);
+      const events = groupByResourceName(aliceUserProcessEvents);
+      expect(events.Doll?.length).toBeGreaterThanOrEqual(2);
       aliceUserProcessEvents = [];
     });
 
@@ -637,8 +632,10 @@ export function describeDolls() {
       expect(status).toBe(200);
     });
 
-    it('drain aliceUserProcessEvents after doll2 delete', async () => {
-      await waitForEvents(aliceUserProcessEvents, 2);
+    it('processEvents after doll2 delete contain Doll events', async () => {
+      await waitForQueuesEmpty(60000);
+      const events = groupByResourceName(aliceUserProcessEvents);
+      expect(events.Doll?.length).toBeGreaterThanOrEqual(2);
       aliceUserProcessEvents = [];
     });
 

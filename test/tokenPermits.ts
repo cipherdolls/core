@@ -1,5 +1,5 @@
 import { ethers } from 'ethers';
-import { auth, api, get, wallets, connectMqtt, waitForEvents, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient, BASE_URL } from './helpers';
+import { auth, api, get, wallets, connectMqtt, waitForQueuesEmpty, groupByResourceName, type ProcessEvent, type MqttClient, BASE_URL } from './helpers';
 
 /* ────────────────────────────────────────────────────────────────
    State shared across sequential tests
@@ -46,19 +46,19 @@ export function describeTokenPermits() {
     });
 
     it('adminUserProcessEvents contains 0 Events initially', async () => {
-      await waitForEvents<ProcessEvent>(adminUserProcessEvents, 0);
+      await waitForQueuesEmpty(60000);
       expect(adminUserProcessEvents.length).toBe(0);
       adminUserProcessEvents = [];
     });
 
     it('aliceUserProcessEvents contains 0 Events initially', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 0);
+      await waitForQueuesEmpty(60000);
       expect(aliceUserProcessEvents.length).toBe(0);
       aliceUserProcessEvents = [];
     });
 
     it('bobUserProcessEvents contains 0 Events initially', async () => {
-      await waitForEvents<ProcessEvent>(bobUserProcessEvents, 0);
+      await waitForQueuesEmpty(60000);
       expect(bobUserProcessEvents.length).toBe(0);
       bobUserProcessEvents = [];
     });
@@ -101,7 +101,7 @@ export function describeTokenPermits() {
     });
 
     it('adminUserProcessEvents contains >= 2 User events after refresh', async () => {
-      await waitForEvents<ProcessEvent>(adminUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(adminUserProcessEvents);
       const users = processEvents.User || [];
       expect(users.length).toBeGreaterThanOrEqual(2);
@@ -128,7 +128,7 @@ export function describeTokenPermits() {
     });
 
     it('aliceUserProcessEvents contains >= 2 User events after refresh', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(aliceUserProcessEvents);
       const users = processEvents.User || [];
       expect(users.length).toBeGreaterThanOrEqual(2);
@@ -154,7 +154,7 @@ export function describeTokenPermits() {
     });
 
     it('bobUserProcessEvents contains >= 2 User events after refresh', async () => {
-      await waitForEvents<ProcessEvent>(bobUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(bobUserProcessEvents);
       const users = processEvents.User || [];
       expect(users.length).toBeGreaterThanOrEqual(2);
@@ -273,7 +273,7 @@ export function describeTokenPermits() {
     });
 
     it('aliceUserProcessEvents contains >= 2 events after permit creation', async () => {
-      await waitForEvents<ProcessEvent>(aliceUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(aliceUserProcessEvents);
       const tokenPermits = processEvents.TokenPermit || [];
       expect(tokenPermits.length).toBeGreaterThanOrEqual(2);
@@ -346,7 +346,7 @@ export function describeTokenPermits() {
     });
 
     it('bobUserProcessEvents contains >= 2 events after permit creation', async () => {
-      await waitForEvents<ProcessEvent>(bobUserProcessEvents, 2);
+      await waitForQueuesEmpty(60000);
       const processEvents = groupByResourceName(bobUserProcessEvents);
       const tokenPermits = processEvents.TokenPermit || [];
       expect(tokenPermits.length).toBeGreaterThanOrEqual(2);
