@@ -64,6 +64,37 @@ async function elevenlabsTts(text: string, voice: TtsVoice): Promise<Buffer> {
   return Buffer.from(await response.arrayBuffer());
 }
 
+async function elevenlabsTtsStream(text: string, voice: TtsVoice, onChunk: (chunk: Buffer) => void): Promise<void> {
+  const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice.providerVoiceId}/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'xi-api-key': ELEVENLABS_API_KEY,
+    },
+    body: JSON.stringify({
+      text,
+      model_id: 'eleven_multilingual_v2',
+      output_format: 'mp3_44100_128',
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`TTS error (${response.status}) from ElevenLabs, voice ${voice.providerVoiceId}: ${errorText}`);
+  }
+
+  if (!response.body) {
+    throw new Error('ElevenLabs stream response has no body');
+  }
+
+  const reader = response.body.getReader();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) onChunk(Buffer.from(value));
+  }
+}
+
 async function minimaxTts(text: string, voice: TtsVoice): Promise<Buffer> {
   const response = await fetch('https://api.minimaxi.chat/v1/t2a_v2', {
     method: 'POST',
@@ -139,12 +170,20 @@ export async function tts(
   }
 
   try {
-    let audioBuffer: Buffer;
     const name = provider.name.toLowerCase();
+    const isElevenLabs = name.includes('elevenlabs') || name.includes('eleven');
+
+    // Stream chunks directly for providers that support it
+    if (!saveFile && isElevenLabs) {
+      await elevenlabsTtsStream(text, voice, options!.onChunk!);
+      return { characters, fileName: null, usdCost };
+    }
+
+    let audioBuffer: Buffer;
 
     if (name.includes('kokoro')) {
       audioBuffer = await kokoroTts(text, voice);
-    } else if (name.includes('elevenlabs') || name.includes('eleven')) {
+    } else if (isElevenLabs) {
       audioBuffer = await elevenlabsTts(text, voice);
     } else if (name.includes('minimax')) {
       audioBuffer = await minimaxTts(text, voice);
