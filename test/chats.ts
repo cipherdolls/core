@@ -930,6 +930,59 @@ export function describeChats() {
       expect(body).toHaveProperty('sttProviderId');
     });
 
+    // ─── Alien ROLEPLAY system prompt ───────────────────────────
+
+    it('alice refreshes alien chat system-prompt', async () => {
+      const { status } = await api('PATCH', `/chats/${alienChatId}`, auth.alice.jwt, { action: 'RefreshSystemPrompt' });
+      expect(status).toBe(200);
+      await waitForQueuesEmpty();
+      aliceChatProcessEvents = [];
+    });
+
+    it('alien chat system-prompt uses roleplay template', async () => {
+      const res = await fetch(`${BASE_URL}/chats/${alienChatId}/system-prompt`, {
+        headers: { Authorization: `Bearer ${auth.alice.jwt}` },
+      });
+      expect(res.status).toBe(200);
+      const prompt = await res.text();
+      expect(prompt).toContain('immersive roleplay');
+      expect(prompt).toContain('### Roleplay Rules');
+      expect(prompt).toContain('Stay fully in character');
+      // Roleplay template should NOT contain normal-only sections
+      expect(prompt).not.toContain('### Doll Status');
+      expect(prompt).not.toContain('### DollBody');
+      expect(prompt).not.toContain('### Date and Time');
+    });
+
+    it('alien chat system-prompt contains avatar name and character', async () => {
+      const res = await fetch(`${BASE_URL}/chats/${alienChatId}/system-prompt`, {
+        headers: { Authorization: `Bearer ${auth.alice.jwt}` },
+      });
+      const prompt = await res.text();
+      const { body: chat } = await api('GET', `/chats/${alienChatId}`, auth.alice.jwt);
+      const { body: avatar } = await api('GET', `/avatars/${chat.avatarId}`, auth.alice.jwt);
+      expect(prompt).toContain(avatar.name);
+      expect(prompt).toContain(avatar.character);
+    });
+
+    it('alien chat system-prompt contains scenario name and systemMessage', async () => {
+      const res = await fetch(`${BASE_URL}/chats/${alienChatId}/system-prompt`, {
+        headers: { Authorization: `Bearer ${auth.alice.jwt}` },
+      });
+      const prompt = await res.text();
+      const { body: scenario } = await api('GET', `/scenarios/${alienScenarioId}`, auth.alice.jwt);
+      expect(prompt).toContain(scenario.name);
+      expect(prompt).toContain(scenario.systemMessage);
+    });
+
+    it('alien chat system-prompt contains user name', async () => {
+      const res = await fetch(`${BASE_URL}/chats/${alienChatId}/system-prompt`, {
+        headers: { Authorization: `Bearer ${auth.alice.jwt}` },
+      });
+      const prompt = await res.text();
+      expect(prompt).toContain('Alice');
+    });
+
     // ─── Final counts ───────────────────────────────────────────
 
     it('alice still has 3 chats after edge-case tests', async () => {

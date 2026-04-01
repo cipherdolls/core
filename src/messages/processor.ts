@@ -2,6 +2,7 @@ import type { Job } from 'bullmq';
 import { Prisma, type Message } from '@prisma/client';
 import { BaseProcessor } from '../queue/processor';
 import { prisma, model } from '../db';
+import { appendChatHistory, invalidateChatHistory } from '../llm/chatHistory';
 
 const scalarFields = Object.values(Prisma.MessageScalarFieldEnum) as Prisma.MessageScalarFieldEnum[];
 
@@ -16,6 +17,9 @@ class MessagesProcessor extends BaseProcessor<Message> {
   }
 
   protected override async onCreated(_job: Job, message: Message): Promise<void> {
+    // Append every message to the Redis chat history cache
+    await appendChatHistory(message);
+
     switch (message.role) {
       case 'USER':
         await this.handleUserCreated(message);
@@ -96,10 +100,18 @@ class MessagesProcessor extends BaseProcessor<Message> {
     });
   }
 
+  protected override async handleDeleted(job: Job): Promise<void> {
+    const message = job.data[this.entityName] as Message;
+    await invalidateChatHistory(message.chatId);
+    return super.handleDeleted(job);
+  }
+
   protected override getFieldHandlers(_job: Job, message: Message) {
     return {
       content: async () => {
         console.log(`[message] Content changed for ${message.id}`);
+        // Content changed (e.g. STT filled in text) — invalidate so it rebuilds from DB
+        await invalidateChatHistory(message.chatId);
       },
     };
   }

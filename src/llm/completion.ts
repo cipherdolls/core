@@ -1,11 +1,14 @@
 import type { Chat, Scenario } from '@prisma/client';
 import { prisma } from '../db';
+import { redisConnection } from '../queue/connection';
+import { getChatHistory } from './chatHistory';
+import { buildAndCacheSystemPrompt } from '../chats/systemPrompt';
 
 /**
  * Call the LLM (Ollama-compatible OpenAI endpoint) for chat completion.
- * Returns the assistant response text and token usage.
+ * System prompt and chat history are read from Redis for speed.
  */
-export async function chatCompletion(chat: Chat & { scenario: Scenario & { chatModel: any } }, userMessage: string): Promise<{
+export async function chatCompletion(chat: Chat & { scenario: Scenario & { chatModel: any } }): Promise<{
   content: string;
   inputTokens: number;
   outputTokens: number;
@@ -16,10 +19,20 @@ export async function chatCompletion(chat: Chat & { scenario: Scenario & { chatM
 
   if (!aiProvider) throw new Error('AI Provider not found');
 
-  // Build messages array
+  // Get system prompt from Redis (rebuild if missing)
+  const cacheKey = `chatSystemPrompt:${chat.id}`;
+  let systemPrompt = await redisConnection.get(cacheKey);
+  if (!systemPrompt) {
+    systemPrompt = await buildAndCacheSystemPrompt(chat.id);
+  }
+
+  // Get chat history from Redis (rebuild from DB if missing)
+  const history = await getChatHistory(chat.id);
+
+  // Build messages array: system prompt + chat history
   const messages = [
-    { role: 'system', content: chat.scenario.systemMessage },
-    { role: 'user', content: userMessage },
+    { role: 'system', content: systemPrompt },
+    ...history,
   ];
 
   const response = await fetch(`${aiProvider.basePath}/chat/completions`, {

@@ -415,6 +415,56 @@ export function describeMessages() {
       expect(assistantMsg).toBeTruthy();
     });
 
+    // ─── Chat history verification: "What was my last question?" ─
+
+    let messageCountBeforeHistoryCheck: number;
+
+    it('count messages before chat history check', async () => {
+      const { body } = await api('GET', `/messages?chatId=${hanaChatId}`, auth.alice.jwt);
+      messageCountBeforeHistoryCheck = body.meta.total;
+    });
+
+    it('alice asks "What was my last question?" to hanaChat', async () => {
+      const { status, body } = await api('POST', '/messages', auth.alice.jwt, {
+        chatId: hanaChatId,
+        content: 'What was my last question?',
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('id');
+    });
+
+    it('hanaChat has 2 more messages after history check question (USER + ASSISTANT)', async () => {
+      let total = messageCountBeforeHistoryCheck;
+      for (let i = 0; i < 25; i++) {
+        await new Promise((r) => setTimeout(r, 1000));
+        const { body } = await api('GET', `/messages?chatId=${hanaChatId}`, auth.alice.jwt);
+        total = body.meta.total;
+        if (total >= messageCountBeforeHistoryCheck + 2) break;
+      }
+      expect(total).toBeGreaterThanOrEqual(messageCountBeforeHistoryCheck + 2);
+    });
+
+    it('AI response references the previous question about France (chat history works)', async () => {
+      const { body } = await api('GET', `/messages?chatId=${hanaChatId}`, auth.alice.jwt);
+
+      // Log all messages for debugging
+      console.log(`Chat history (${body.data.length} messages):`);
+      for (const m of body.data) {
+        console.log(`  [${m.role}] ${m.content?.substring(0, 100)}${m.content?.length > 100 ? '…' : ''}`);
+      }
+
+      // The newest message is first (reverse chronological order from API)
+      const newestAssistant = body.data.find((m: any) => m.role === 'ASSISTANT');
+      expect(newestAssistant).toBeTruthy();
+
+      const content = newestAssistant.content.toLowerCase();
+      // The AI should reference the conversation — mentioning france, capital, or germany proves it sees history
+      const referencesHistory = content.includes('france') || content.includes('capital') || content.includes('germany');
+      expect(referencesHistory).toBe(true);
+
+      console.log(`Chat history test — AI response: "${newestAssistant.content}"`);
+    });
+
     // ─── Audio message tests ────────────────────────────────────
 
     let audioMessageId: string;

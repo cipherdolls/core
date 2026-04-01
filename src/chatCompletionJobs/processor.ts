@@ -5,6 +5,7 @@ import { ethers } from 'ethers';
 import { BaseProcessor } from '../queue/processor';
 import { prisma, model } from '../db';
 import { chatCompletion } from '../llm/completion';
+import { rebuildChatHistory } from '../llm/chatHistory';
 
 const MASTER_WALLET_ADDRESS = process.env.MASTER_WALLET_ADDRESS!;
 
@@ -38,15 +39,8 @@ class ChatCompletionJobsProcessor extends BaseProcessor<ChatCompletionJob> {
       });
       if (!chat) throw new Error('Chat not found');
 
-      // Get the user message that triggered this
-      const userMessage = ccJob.messageId
-        ? await prisma.message.findUnique({ where: { id: ccJob.messageId } })
-        : await prisma.message.findFirst({ where: { chatId: chat.id, role: 'USER' }, orderBy: { createdAt: 'desc' } });
-
-      if (!userMessage?.content) throw new Error('No user message content');
-
-      // Call LLM
-      const result = await chatCompletion(chat as any, userMessage.content);
+      // Call LLM (chat history is fetched inside chatCompletion)
+      const result = await chatCompletion(chat as any);
 
       // Calculate cost
       const chatModel = chat.scenario.chatModel;
@@ -81,7 +75,8 @@ class ChatCompletionJobsProcessor extends BaseProcessor<ChatCompletionJob> {
       // Create transactions if cost > 0
       await this.createTransactions(chat, assistantMessage.id, usdCost);
 
-      // TTS job is created by the messages processor when it sees the ASSISTANT message
+      // Rebuild chat history cache from DB now that the assistant message is persisted
+      await rebuildChatHistory(chat.id);
 
       console.log(`[chatCompletionJob] Completed: ${result.totalTokens} tokens, $${usdCost.toFixed(6)}`);
     } catch (error: any) {
