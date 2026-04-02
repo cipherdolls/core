@@ -5,7 +5,7 @@ import { prisma } from '../db';
 import { tts } from '../tts/tts.helper';
 
 const ASSETS_PATH = process.env.ASSETS_PATH ?? '/app/uploads';
-const PREVIEW_TEXT = "Hello, it's nice to meet you. How are you today?";
+const DEFAULT_EXAMPLE_TEXT = "Hello, this is a test.";
 
 const scalarFields = Object.values(Prisma.TtsVoiceScalarFieldEnum) as Prisma.TtsVoiceScalarFieldEnum[];
 
@@ -26,6 +26,23 @@ class TtsVoicesProcessor extends BaseProcessor<TtsVoice> {
   protected override getFieldHandlers(_job: Job, voice: TtsVoice) {
     return {
       providerVoiceId: () => this.generatePreview(voice),
+      action: async () => {
+        switch (voice.action) {
+          case 'CreateExampleAudio':
+            console.log(`[ttsVoice] ${voice.id} action: CreateExampleAudio`);
+            await this.generatePreview(voice);
+            break;
+          case 'Nothing':
+            return;
+          default:
+            console.warn(`[ttsVoice] Unhandled action: ${voice.action}`);
+            return;
+        }
+        await prisma.ttsVoice.update({
+          where: { id: voice.id },
+          data: { action: 'Nothing' },
+        });
+      },
     };
   }
 
@@ -34,7 +51,8 @@ class TtsVoicesProcessor extends BaseProcessor<TtsVoice> {
       const ttsProvider = await prisma.ttsProvider.findUnique({ where: { id: voice.ttsProviderId } });
       if (!ttsProvider) return;
 
-      const result = await tts(PREVIEW_TEXT, voice, ttsProvider, `${ASSETS_PATH}/audios`);
+      const exampleText = ttsProvider.exampleVoiceText || DEFAULT_EXAMPLE_TEXT;
+      const result = await tts(exampleText, voice, ttsProvider, `${ASSETS_PATH}/audios`);
 
       // Delete existing audio record for this voice
       const existing = await prisma.audio.findUnique({ where: { ttsVoiceId: voice.id } });

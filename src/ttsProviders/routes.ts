@@ -48,6 +48,7 @@ export const ttsProvidersRoutes = new Elysia({ prefix: '/tts-providers' })
       name: t.String(),
       dollarPerCharacter: t.Optional(t.Number()),
       censored: t.Optional(t.Boolean()),
+      exampleVoiceText: t.Optional(t.String()),
     }),
   })
 
@@ -57,7 +58,7 @@ export const ttsProvidersRoutes = new Elysia({ prefix: '/tts-providers' })
     if (!original) { set.status = 404; return { error: 'Not found' }; }
     const updated = await model.ttsProvider.update({
       where: { id: params.id },
-      data: pickFields(body, ['name', 'dollarPerCharacter', 'censored']),
+      data: pickFields(body, ['name', 'dollarPerCharacter', 'censored', 'exampleVoiceText']),
       include: { _count: { select: { ttsVoices: true } } },
     }, original);
     return updated;
@@ -66,6 +67,7 @@ export const ttsProvidersRoutes = new Elysia({ prefix: '/tts-providers' })
       name: t.Optional(t.String()),
       dollarPerCharacter: t.Optional(t.Number()),
       censored: t.Optional(t.Boolean()),
+      exampleVoiceText: t.Optional(t.String()),
     }),
   })
 

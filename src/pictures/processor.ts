@@ -12,7 +12,7 @@ class PicturesProcessor extends BaseProcessor<Picture> {
   protected override async getTargets(entity: Picture) {
     if (entity.dollId) {
       const doll = await prisma.doll.findUnique({ where: { id: entity.dollId } });
-      return { userId: doll?.userId, dollId: doll?.id };
+      return { userId: doll?.userId };
     }
     if (entity.avatarId) {
       const avatar = await prisma.avatar.findUnique({ where: { id: entity.avatarId } });

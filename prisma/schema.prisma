@@ -465,6 +465,7 @@ model TtsProvider {
   updatedAt          DateTime @updatedAt
   dollarPerCharacter Decimal  @default(0) @db.Decimal(19, 9)
   name               String
+  exampleVoiceText   String   @default("Hello, this is a test.")
   picture            Picture?
   censored           Boolean  @default(true)
   user      User       @relation(fields: [userId], references: [id])
@@ -482,11 +483,17 @@ model TtsVoice {
   preview         String?
   gender          Gender?
   language        TtsLanguage?
+  action          TtsVoiceAction?
   ttsProvider   TtsProvider @relation(fields: [ttsProviderId], references: [id], onDelete: Cascade)
   ttsProviderId String
   avatars       Avatar[]
   ttsJobs       TtsJob[]
   audio         Audio?
+}
+
+enum TtsVoiceAction {
+  CreateExampleAudio
+  Nothing
 }
 
 model TokenPermit {
