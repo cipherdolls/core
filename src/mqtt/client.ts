@@ -20,14 +20,33 @@ export function startMqttClient() {
     connectTimeout: 10000,
   });
 
+  let lastErrorMsg = '';
+  let errorCount = 0;
+
   client.on('connect', () => {
-    console.log(`MQTT client connected to ${brokerUrl}`);
+    if (errorCount > 0) {
+      console.log(`[mqtt] Reconnected to ${brokerUrl} after ${errorCount} failed attempts`);
+    } else {
+      console.log(`[mqtt] Connected to ${brokerUrl}`);
+    }
+    lastErrorMsg = '';
+    errorCount = 0;
+  });
+
+  client.on('offline', () => {
+    console.warn(`[mqtt] Client offline, will retry...`);
   });
 
   console.log(`[mqtt] Connecting to ${brokerUrl}`);
 
   client.on('error', (err) => {
-    console.error(`[mqtt] Client error (${brokerUrl}):`, err.message);
+    errorCount++;
+    if (err.message !== lastErrorMsg) {
+      console.error(`[mqtt] Client error (${brokerUrl}): ${err.message}`);
+      lastErrorMsg = err.message;
+    } else if (errorCount % 30 === 0) {
+      console.error(`[mqtt] Still failing after ${errorCount} attempts: ${err.message}`);
+    }
   });
 }
 
