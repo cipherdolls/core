@@ -1,7 +1,6 @@
 import { Aedes, Client } from 'aedes';
 import * as net from 'net';
 import * as http from 'http';
-import { WebSocketServer, createWebSocketStream } from 'ws';
 import { verifyToken, type JwtPayload } from '../auth/jwt';
 import { prisma } from '../db';
 
@@ -111,11 +110,8 @@ export async function startBroker() {
 
   /* ── WebSocket Server (port 8083) ──────────────────────────── */
   wsServer = http.createServer();
-  const wss = new WebSocketServer({ server: wsServer });
-  wss.on('connection', (ws, req) => {
-    const stream = createWebSocketStream(ws) as any;
-    broker.handle(stream);
-  });
+  const ws = require('websocket-stream');
+  ws.createServer({ server: wsServer }, broker.handle);
   wsServer.listen(8083, () => {
     console.log('MQTT WebSocket broker running on port 8083');
   });

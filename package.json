@@ -23,7 +23,7 @@
     "jsonwebtoken": "^9.0.2",
     "mqtt": "^5.15.1",
     "sharp": "^0.34.5",
-    "ws": "^8.18.0",
+    "websocket-stream": "^5.5.2",
     "zod": "^4.3.6"
   },
   "prisma": {
@@ -32,7 +32,6 @@
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.9",
     "@types/sharp": "^0.32.0",
-    "@types/ws": "^8.18.0",
     "bun-types": "latest",
     "prisma": "^6.8.2",
     "typescript": "^5.7"
