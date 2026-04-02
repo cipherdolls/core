@@ -588,6 +588,49 @@ export function describeScenarios() {
       aliceUserProcessEvents = [];
     });
 
+    // ─── Type change disconnects models ─────────────────────────
+
+    it('alice switches SmallTalk from NORMAL to ROLEPLAY and models are disconnected', async () => {
+      // Ensure models are connected first
+      const { body: before } = await api('GET', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt);
+      expect(before).toHaveProperty('embeddingModelId', embeddingModelId);
+      expect(before).toHaveProperty('reasoningModelId', reasoningModelId);
+      expect(before).toHaveProperty('type', 'NORMAL');
+
+      const { status, body } = await api('PATCH', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt, {
+        type: 'ROLEPLAY',
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('type', 'ROLEPLAY');
+      expect(body).toHaveProperty('embeddingModelId', null);
+      expect(body).toHaveProperty('reasoningModelId', null);
+      expect(body).toHaveProperty('chatModelId', chatModelId);
+    });
+
+    it('aliceUserProcessEvents contains >= 2 Events after type change', async () => {
+      await waitForQueuesEmpty(60000);
+      expect(aliceUserProcessEvents.length).toBeGreaterThanOrEqual(2);
+      aliceUserProcessEvents = [];
+    });
+
+    it('alice switches SmallTalk back to NORMAL', async () => {
+      const { status, body } = await api('PATCH', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt, {
+        type: 'NORMAL',
+        embeddingModelId,
+        reasoningModelId,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('type', 'NORMAL');
+      expect(body).toHaveProperty('embeddingModelId', embeddingModelId);
+      expect(body).toHaveProperty('reasoningModelId', reasoningModelId);
+    });
+
+    it('aliceUserProcessEvents contains >= 2 Events after type restore', async () => {
+      await waitForQueuesEmpty(60000);
+      expect(aliceUserProcessEvents.length).toBeGreaterThanOrEqual(2);
+      aliceUserProcessEvents = [];
+    });
+
     // ─── ROLEPLAY alien scenario ───────────────────────────────
 
     it('alice creates a ROLEPLAY alien scenario', async () => {

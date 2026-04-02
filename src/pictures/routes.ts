@@ -1,6 +1,6 @@
 import { Body } from '../helpers/schema';
 import { Elysia, t } from 'elysia';
-import { prisma } from '../db';
+import { prisma, model } from '../db';
 import { jwtGuard } from '../auth/jwt';
 import { savePicture, servePicture } from './pictures';
 
@@ -76,12 +76,12 @@ export const picturesRoutes = new Elysia({ prefix: '/pictures' })
     // Delete existing picture for this entity (one-to-one)
     const existing = await prisma.picture.findFirst({ where: { [entityKey]: entityId } });
     if (existing) {
-      await prisma.picture.delete({ where: { id: existing.id } });
+      await model.picture.delete({ where: { id: existing.id } });
     }
 
     const fileId = await savePicture(body.file);
 
-    const picture = await prisma.picture.create({
+    const picture = await model.picture.create({
       data: {
         id: fileId,
         [entityKey]: entityId,
@@ -105,5 +105,5 @@ export const picturesRoutes = new Elysia({ prefix: '/pictures' })
   .delete('/:id', async ({ user, params, set }) => {
     const item = await prisma.picture.findUnique({ where: { id: params.id } });
     if (!item) { set.status = 404; return { error: 'Not found' }; }
-    return prisma.picture.delete({ where: { id: params.id } });
+    return model.picture.delete({ where: { id: params.id } });
   });

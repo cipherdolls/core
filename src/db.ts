@@ -22,5 +22,6 @@ export const model = {
   ttsJob: createCudService('ttsJob', prisma.ttsJob),
   ttsProvider: createCudService('ttsProvider', prisma.ttsProvider),
   ttsVoice: createCudService('ttsVoice', prisma.ttsVoice),
+  picture: createCudService('picture', prisma.picture),
   user: createCudService('user', prisma.user),
 };

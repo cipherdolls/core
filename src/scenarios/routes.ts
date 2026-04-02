@@ -139,10 +139,16 @@ export const scenariosRoutes = new Elysia({ prefix: '/scenarios' })
     if (!item) { set.status = 404; return { error: 'Not found' }; }
     if (item.userId !== user.userId && user.role !== 'ADMIN') { set.status = 403; return { error: 'Not authorized' }; }
 
-    const { chatModelId, embeddingModelId, reasoningModelId, avatarIds, ...rest } = body;
+    let { chatModelId, embeddingModelId, reasoningModelId, avatarIds, ...rest } = body;
     // Auto-compute free flag when dollarPerMessage changes
     if (body.dollarPerMessage !== undefined) {
       (rest as any).free = body.dollarPerMessage === 0;
+    }
+    // When switching to ROLEPLAY, disconnect embedding and reasoning models
+    const switchingToRoleplay = rest.type === 'ROLEPLAY' && item.type !== 'ROLEPLAY';
+    if (switchingToRoleplay) {
+      if (embeddingModelId === undefined) embeddingModelId = null;
+      if (reasoningModelId === undefined) reasoningModelId = null;
     }
     const updated = await model.scenario.update({
       where: { id: params.id },
