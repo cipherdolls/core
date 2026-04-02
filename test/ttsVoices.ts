@@ -485,6 +485,73 @@ export function describeTtsVoices() {
       expect(body.data.length).toBe(3);
     });
 
+    // ─── exampleVoiceText update regenerates all voice audio ─────
+
+    let originalAudioIds: Record<string, string> = {};
+
+    it('store original audio ids for all voices before exampleVoiceText update', async () => {
+      await waitForQueuesEmpty(60000);
+      const { status, body } = await api('GET', '/tts-voices', auth.admin.jwt);
+      expect(status).toBe(200);
+      for (const voice of body.data) {
+        expect(voice.audio).not.toBeNull();
+        originalAudioIds[voice.id] = voice.audio.id;
+      }
+      expect(Object.keys(originalAudioIds).length).toBe(3);
+    });
+
+    it('admin updates Kokoro provider exampleVoiceText', async () => {
+      const res1 = await api('GET', '/tts-providers?name=CipherdollsKokoro', auth.admin.jwt);
+      expect(res1.status).toBe(200);
+      const kokoro = res1.body.data[0];
+
+      const { status, body } = await api('PATCH', `/tts-providers/${kokoro.id}`, auth.admin.jwt, {
+        exampleVoiceText: 'The quick brown fox jumps over the lazy dog.',
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('exampleVoiceText', 'The quick brown fox jumps over the lazy dog.');
+    });
+
+    it('wait for all voice audio regeneration after exampleVoiceText update', async () => {
+      await waitForQueuesEmpty(120000);
+      const events = groupByResourceName(adminUserProcessEvents);
+      const ttsVoice = events.TtsVoice || [];
+      // 3 voices × 2 events each (active + completed) for the action update
+      expect(ttsVoice.length).toBeGreaterThanOrEqual(6);
+      adminUserProcessEvents = [];
+    });
+
+    it('all voice audio ids changed after exampleVoiceText update', async () => {
+      const { status, body } = await api('GET', '/tts-voices', auth.admin.jwt);
+      expect(status).toBe(200);
+      for (const voice of body.data) {
+        expect(voice.audio).not.toBeNull();
+        expect(voice.audio.id).not.toBe(originalAudioIds[voice.id]);
+      }
+    });
+
+    it('voice audio content matches new exampleVoiceText via whisper transcription', async () => {
+      const whisperUrl = process.env.WHISPER_URL ?? 'http://localhost:9000';
+      const audioRes = await fetch(`${BASE_URL}/audios/by/tts-voices/${bellaVoiceId}/audio.mp3`);
+      expect(audioRes.status).toBe(200);
+      const audioBuffer = await audioRes.arrayBuffer();
+
+      const formData = new FormData();
+      formData.append('audio_file', new File([audioBuffer], 'audio.mp3', { type: 'audio/mpeg' }));
+
+      const url = new URL(`${whisperUrl}/asr`);
+      url.searchParams.append('encode', 'true');
+      url.searchParams.append('task', 'transcribe');
+      url.searchParams.append('output', 'json');
+      url.searchParams.append('language', 'en');
+
+      const whisperRes = await fetch(url.toString(), { method: 'POST', body: formData });
+      expect(whisperRes.status).toBe(200);
+      const whisperBody = await whisperRes.json() as { text: string };
+      const transcribed = whisperBody.text.toLowerCase().trim();
+      expect(transcribed).toContain('quick brown fox');
+    });
+
     // ─── MQTT cleanup ───────────────────────────────────────────
 
     it('consume remaining events from voice operations', async () => {
