@@ -330,6 +330,222 @@ export function describeAvatars() {
       expect(res.headers.get('content-type')).toBe('audio/mpeg');
     });
 
+    let hanaOriginalAudioId: string;
+
+    it('store hana original audio id for later comparison', async () => {
+      const { status, body } = await api('GET', `/avatars/${hanaAvatarId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+      hanaOriginalAudioId = body.audio.id;
+      expect(hanaOriginalAudioId).toBeTruthy();
+    });
+
+    it('hana audio content matches introduction via whisper transcription', async () => {
+      const whisperUrl = process.env.WHISPER_URL ?? 'http://localhost:9000';
+      const audioRes = await fetch(`${BASE_URL}/audios/by/avatars/${hanaAvatarId}/audio.mp3`);
+      expect(audioRes.status).toBe(200);
+      const audioBuffer = await audioRes.arrayBuffer();
+
+      const formData = new FormData();
+      formData.append('audio_file', new File([audioBuffer], 'audio.mp3', { type: 'audio/mpeg' }));
+
+      const url = new URL(`${whisperUrl}/asr`);
+      url.searchParams.append('encode', 'true');
+      url.searchParams.append('task', 'transcribe');
+      url.searchParams.append('output', 'json');
+      url.searchParams.append('language', 'en');
+
+      const whisperRes = await fetch(url.toString(), { method: 'POST', body: formData });
+      expect(whisperRes.status).toBe(200);
+      const whisperBody = await whisperRes.json() as { text: string };
+      const transcribed = whisperBody.text.toLowerCase().trim();
+      expect(transcribed).toContain('hana');
+      expect(transcribed).toContain('nice to meet you');
+    });
+
+    // ─── Introduction change regenerates audio ───────────────────
+
+    it('alice updates hana introduction text', async () => {
+      const { status, body } = await api('PATCH', `/avatars/${hanaAvatarId}`, auth.alice.jwt, {
+        introduction: 'Hello, my name is Hana and I love helping people.',
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('introduction', 'Hello, my name is Hana and I love helping people.');
+    });
+
+    it('aliceUserProcessEvents contains >= 2 Avatar events after introduction change', async () => {
+      await waitForQueuesEmpty(60000);
+      const events = groupByResourceName(aliceUserProcessEvents);
+      const avatar = events.Avatar || [];
+      expect(avatar.length).toBeGreaterThanOrEqual(2);
+      aliceUserProcessEvents = [];
+    });
+
+    it('hana audio id changed after introduction update (audio was recreated)', async () => {
+      const { status, body } = await api('GET', `/avatars/${hanaAvatarId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+      expect(body.audio).not.toBeNull();
+      expect(body.audio.id).not.toBe(hanaOriginalAudioId);
+      hanaOriginalAudioId = body.audio.id;
+    });
+
+    it('hana audio content matches new introduction via whisper', async () => {
+      const whisperUrl = process.env.WHISPER_URL ?? 'http://localhost:9000';
+      const audioRes = await fetch(`${BASE_URL}/audios/by/avatars/${hanaAvatarId}/audio.mp3`);
+      expect(audioRes.status).toBe(200);
+      const audioBuffer = await audioRes.arrayBuffer();
+
+      const formData = new FormData();
+      formData.append('audio_file', new File([audioBuffer], 'audio.mp3', { type: 'audio/mpeg' }));
+
+      const url = new URL(`${whisperUrl}/asr`);
+      url.searchParams.append('encode', 'true');
+      url.searchParams.append('task', 'transcribe');
+      url.searchParams.append('output', 'json');
+      url.searchParams.append('language', 'en');
+
+      const whisperRes = await fetch(url.toString(), { method: 'POST', body: formData });
+      expect(whisperRes.status).toBe(200);
+      const whisperBody = await whisperRes.json() as { text: string };
+      const transcribed = whisperBody.text.toLowerCase().trim();
+      expect(transcribed).toContain('hana');
+      expect(transcribed).toContain('helping people');
+    });
+
+    // ─── TTS voice change regenerates audio ──────────────────────
+
+    it('alice changes hana ttsVoice to a different voice', async () => {
+      const { body: voices } = await api('GET', '/tts-voices', auth.alice.jwt);
+      const currentVoice = (await api('GET', `/avatars/${hanaAvatarId}`, auth.alice.jwt)).body.ttsVoiceId;
+      const newVoice = voices.data.find((v: any) => v.id !== currentVoice) ?? voices.data[0];
+
+      const { status, body } = await api('PATCH', `/avatars/${hanaAvatarId}`, auth.alice.jwt, {
+        ttsVoiceId: newVoice.id,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('ttsVoiceId', newVoice.id);
+    });
+
+    it('aliceUserProcessEvents contains >= 2 Avatar events after ttsVoice change', async () => {
+      await waitForQueuesEmpty(60000);
+      const events = groupByResourceName(aliceUserProcessEvents);
+      const avatar = events.Avatar || [];
+      expect(avatar.length).toBeGreaterThanOrEqual(2);
+      aliceUserProcessEvents = [];
+    });
+
+    it('hana audio id changed after ttsVoice update (audio was recreated)', async () => {
+      const { status, body } = await api('GET', `/avatars/${hanaAvatarId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+      expect(body.audio).not.toBeNull();
+      expect(body.audio.id).not.toBe(hanaOriginalAudioId);
+      hanaOriginalAudioId = body.audio.id;
+    });
+
+    it('hana audio still serves after ttsVoice change', async () => {
+      const res = await fetch(`${BASE_URL}/audios/by/avatars/${hanaAvatarId}/audio.mp3`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toBe('audio/mpeg');
+    });
+
+    it('hana audio content still matches introduction after voice change via whisper', async () => {
+      const whisperUrl = process.env.WHISPER_URL ?? 'http://localhost:9000';
+      const audioRes = await fetch(`${BASE_URL}/audios/by/avatars/${hanaAvatarId}/audio.mp3`);
+      expect(audioRes.status).toBe(200);
+      const audioBuffer = await audioRes.arrayBuffer();
+
+      const formData = new FormData();
+      formData.append('audio_file', new File([audioBuffer], 'audio.mp3', { type: 'audio/mpeg' }));
+
+      const url = new URL(`${whisperUrl}/asr`);
+      url.searchParams.append('encode', 'true');
+      url.searchParams.append('task', 'transcribe');
+      url.searchParams.append('output', 'json');
+      url.searchParams.append('language', 'en');
+
+      const whisperRes = await fetch(url.toString(), { method: 'POST', body: formData });
+      expect(whisperRes.status).toBe(200);
+      const whisperBody = await whisperRes.json() as { text: string };
+      const transcribed = whisperBody.text.toLowerCase().trim();
+      expect(transcribed).toContain('hana');
+      expect(transcribed).toContain('helping people');
+    });
+
+    // ─── Create avatar with introduction triggers audio directly ─
+
+    it('alice creates avatar with introduction and audio is generated', async () => {
+      const { body: voices } = await api('GET', '/tts-voices', auth.alice.jwt);
+      const ttsVoiceId = voices.data[0].id;
+
+      const { status, body } = await api('POST', '/avatars', auth.alice.jwt, {
+        name: 'Mika',
+        shortDesc: 'Mika the Cheerful',
+        character: 'Cheerful, optimistic',
+        ttsVoiceId,
+        language: 'en',
+        gender: 'Female',
+        introduction: 'Hey there, I am Mika and I am super excited to chat with you!',
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('id');
+      expect(body).toHaveProperty('introduction', 'Hey there, I am Mika and I am super excited to chat with you!');
+
+      await waitForQueuesEmpty(60000);
+      aliceUserProcessEvents = [];
+
+      const { body: avatar } = await api('GET', `/avatars/${body.id}`, auth.alice.jwt);
+      expect(avatar.audio).not.toBeNull();
+      expect(avatar.audio).toHaveProperty('id');
+      expect(avatar.audio).toHaveProperty('avatarId', body.id);
+
+      // Verify audio serves
+      const audioRes = await fetch(`${BASE_URL}/audios/by/avatars/${body.id}/audio.mp3`);
+      expect(audioRes.status).toBe(200);
+      expect(audioRes.headers.get('content-type')).toBe('audio/mpeg');
+
+      // Verify audio content via whisper
+      const whisperUrl = process.env.WHISPER_URL ?? 'http://localhost:9000';
+      const audioBuffer = await audioRes.arrayBuffer();
+      const formData = new FormData();
+      formData.append('audio_file', new File([audioBuffer], 'audio.mp3', { type: 'audio/mpeg' }));
+
+      const url = new URL(`${whisperUrl}/asr`);
+      url.searchParams.append('encode', 'true');
+      url.searchParams.append('task', 'transcribe');
+      url.searchParams.append('output', 'json');
+      url.searchParams.append('language', 'en');
+
+      const whisperRes = await fetch(url.toString(), { method: 'POST', body: formData });
+      expect(whisperRes.status).toBe(200);
+      const whisperBody = await whisperRes.json() as { text: string };
+      const transcribed = whisperBody.text.toLowerCase().trim();
+      expect(transcribed).toContain('mika');
+
+      // Cleanup: delete the test avatar
+      await api('DELETE', `/avatars/${body.id}`, auth.alice.jwt);
+      await waitForQueuesEmpty(60000);
+      aliceUserProcessEvents = [];
+    });
+
+    // ─── Restore hana for remaining tests ─────────────────────────
+
+    it('alice restores hana original introduction and voice', async () => {
+      const { body: voices } = await api('GET', '/tts-voices', auth.alice.jwt);
+      const originalVoiceId = voices.data[0].id;
+
+      const { status, body } = await api('PATCH', `/avatars/${hanaAvatarId}`, auth.alice.jwt, {
+        introduction: 'Hi, I am Hana. Nice to meet you!',
+        ttsVoiceId: originalVoiceId,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('introduction', 'Hi, I am Hana. Nice to meet you!');
+      expect(body).toHaveProperty('ttsVoiceId', originalVoiceId);
+    });
+
+    it('aliceUserProcessEvents drained after hana restore', async () => {
+      await waitForQueuesEmpty(60000);
+      aliceUserProcessEvents = [];
+    });
+
     // ─── Publish freya — can't publish with unpublished scenarios ─
 
     it('alice can not publish freya with unpublished scenarios', async () => {
