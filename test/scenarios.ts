@@ -421,6 +421,14 @@ export function describeScenarios() {
       expect(body).toHaveProperty('published', true);
     });
 
+    it('bobUserProcessEvents contains >= 2 Events after nsfw update', async () => {
+      await waitForQueuesEmpty(60000);
+      const processEvents = groupByResourceName(bobUserProcessEvents);
+      const scenarios = processEvents.Scenario || [];
+      expect(scenarios.length).toBeGreaterThanOrEqual(2);
+      bobUserProcessEvents = [];
+    });
+
     it('bob filter scenarios by nsfw', async () => {
       const { status, body } = await api('GET', '/scenarios?nsfw=true', auth.bob.jwt);
       expect(status).toBe(200);
@@ -547,14 +555,19 @@ export function describeScenarios() {
 
     it('aliceUserProcessEvents contains >= 2 Events after creating scenario without models', async () => {
       await waitForQueuesEmpty(60000);
-      expect(aliceUserProcessEvents.length).toBeGreaterThanOrEqual(2);
+      const processEvents = groupByResourceName(aliceUserProcessEvents);
+      const scenarios = processEvents.Scenario || [];
+      expect(scenarios.length).toBeGreaterThanOrEqual(2);
       aliceUserProcessEvents = [];
     });
 
-    it('alice update scenario to clear embedding and reasoning models', async () => {
-      const { body: scenario } = await api('GET', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt);
-      expect(scenario.embeddingModelId).not.toBeNull();
+    it('SmallTalk has non-null embeddingModelId before clearing', async () => {
+      const { status, body } = await api('GET', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+      expect(body.embeddingModelId).not.toBeNull();
+    });
 
+    it('alice update scenario to clear embedding and reasoning models', async () => {
       const { status, body } = await api('PATCH', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt, {
         embeddingModelId: null,
         reasoningModelId: null,
@@ -568,7 +581,9 @@ export function describeScenarios() {
 
     it('aliceUserProcessEvents contains >= 2 Events after clearing models', async () => {
       await waitForQueuesEmpty(60000);
-      expect(aliceUserProcessEvents.length).toBeGreaterThanOrEqual(2);
+      const processEvents = groupByResourceName(aliceUserProcessEvents);
+      const scenarios = processEvents.Scenario || [];
+      expect(scenarios.length).toBeGreaterThanOrEqual(2);
       aliceUserProcessEvents = [];
     });
 
@@ -590,13 +605,15 @@ export function describeScenarios() {
 
     // ─── Type change disconnects models ─────────────────────────
 
-    it('alice switches SmallTalk from NORMAL to ROLEPLAY and models are disconnected', async () => {
-      // Ensure models are connected first
-      const { body: before } = await api('GET', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt);
-      expect(before).toHaveProperty('embeddingModelId', embeddingModelId);
-      expect(before).toHaveProperty('reasoningModelId', reasoningModelId);
-      expect(before).toHaveProperty('type', 'NORMAL');
+    it('SmallTalk has models connected before type change', async () => {
+      const { status, body } = await api('GET', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('embeddingModelId', embeddingModelId);
+      expect(body).toHaveProperty('reasoningModelId', reasoningModelId);
+      expect(body).toHaveProperty('type', 'NORMAL');
+    });
 
+    it('alice switches SmallTalk from NORMAL to ROLEPLAY and models are disconnected', async () => {
       const { status, body } = await api('PATCH', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt, {
         type: 'ROLEPLAY',
       });
@@ -609,7 +626,9 @@ export function describeScenarios() {
 
     it('aliceUserProcessEvents contains >= 2 Events after type change', async () => {
       await waitForQueuesEmpty(60000);
-      expect(aliceUserProcessEvents.length).toBeGreaterThanOrEqual(2);
+      const processEvents = groupByResourceName(aliceUserProcessEvents);
+      const scenarios = processEvents.Scenario || [];
+      expect(scenarios.length).toBeGreaterThanOrEqual(2);
       aliceUserProcessEvents = [];
     });
 
@@ -627,7 +646,9 @@ export function describeScenarios() {
 
     it('aliceUserProcessEvents contains >= 2 Events after type restore', async () => {
       await waitForQueuesEmpty(60000);
-      expect(aliceUserProcessEvents.length).toBeGreaterThanOrEqual(2);
+      const processEvents = groupByResourceName(aliceUserProcessEvents);
+      const scenarios = processEvents.Scenario || [];
+      expect(scenarios.length).toBeGreaterThanOrEqual(2);
       aliceUserProcessEvents = [];
     });
 
@@ -655,23 +676,21 @@ export function describeScenarios() {
 
     it('aliceUserProcessEvents contains >= 2 Events after alien scenario create', async () => {
       await waitForQueuesEmpty(60000);
-      expect(aliceUserProcessEvents.length).toBeGreaterThanOrEqual(2);
+      const processEvents = groupByResourceName(aliceUserProcessEvents);
+      const scenarios = processEvents.Scenario || [];
+      expect(scenarios.length).toBeGreaterThanOrEqual(2);
       aliceUserProcessEvents = [];
     });
 
-    it('alice gets her alien scenario', async () => {
+    it('alice finds her alien scenario by name filter', async () => {
       const { status, body } = await api('GET', '/scenarios?name=Alien', auth.alice.jwt);
       expect(status).toBe(200);
       expect(body.data.length).toBeGreaterThanOrEqual(1);
-      const alienScenario = body.data[0];
-
-      const { status: s2, body: detail } = await api('GET', `/scenarios/${alienScenario.id}`, auth.alice.jwt);
-      expect(s2).toBe(200);
-      expect(detail).toHaveProperty('name', 'Alien Believer');
-      expect(detail).toHaveProperty('type', 'ROLEPLAY');
-      expect(detail).toHaveProperty('free', true);
-      expect(detail).toHaveProperty('userGender', 'Male');
-      expect(detail).toHaveProperty('avatarGender', 'Female');
+      expect(body.data[0]).toHaveProperty('name', 'Alien Believer');
+      expect(body.data[0]).toHaveProperty('type', 'ROLEPLAY');
+      expect(body.data[0]).toHaveProperty('free', true);
+      expect(body.data[0]).toHaveProperty('userGender', 'Male');
+      expect(body.data[0]).toHaveProperty('avatarGender', 'Female');
     });
 
     // ─── Avatar assignment on scenario create & patch ───────────
@@ -703,8 +722,11 @@ export function describeScenarios() {
       expect(body.avatars[0]).toHaveProperty('id', avatarForScenarioId);
     });
 
-    it('consume events after avatar-linked scenario create', async () => {
+    it('aliceUserProcessEvents contains >= 2 Events after avatar-linked scenario create', async () => {
       await waitForQueuesEmpty(60000);
+      const processEvents = groupByResourceName(aliceUserProcessEvents);
+      const scenarios = processEvents.Scenario || [];
+      expect(scenarios.length).toBeGreaterThanOrEqual(2);
       aliceUserProcessEvents = [];
     });
 
@@ -717,8 +739,9 @@ export function describeScenarios() {
       expect(body.avatars[0]).toHaveProperty('id', avatarForScenarioId);
     });
 
-    it('consume events after avatar patch', async () => {
+    it('no Scenario events after avatar patch (avatarIds is a relation, not scalar)', async () => {
       await waitForQueuesEmpty(60000);
+      expect(aliceUserProcessEvents.length).toBe(0);
       aliceUserProcessEvents = [];
     });
 
@@ -730,28 +753,32 @@ export function describeScenarios() {
       expect(body.avatars).toHaveLength(0);
     });
 
-    it('consume events after avatar removal', async () => {
+    it('no Scenario events after avatar removal (avatarIds is a relation, not scalar)', async () => {
       await waitForQueuesEmpty(60000);
+      expect(aliceUserProcessEvents.length).toBe(0);
       aliceUserProcessEvents = [];
     });
 
-    it('GET scenario by id returns avatars', async () => {
-      // Re-add avatar first
-      await api('PATCH', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt, {
+    it('alice re-adds avatar to SmallTalk scenario', async () => {
+      const { status, body } = await api('PATCH', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt, {
         avatarIds: [avatarForScenarioId],
       });
-      await waitForQueuesEmpty(60000);
-      aliceUserProcessEvents = [];
-
-      const { status, body } = await api('GET', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt);
       expect(status).toBe(200);
       expect(body.avatars).toHaveLength(1);
       expect(body.avatars[0]).toHaveProperty('id', avatarForScenarioId);
     });
 
-    it('consume events after avatar re-add', async () => {
+    it('no Scenario events after avatar re-add (avatarIds is a relation, not scalar)', async () => {
       await waitForQueuesEmpty(60000);
+      expect(aliceUserProcessEvents.length).toBe(0);
       aliceUserProcessEvents = [];
+    });
+
+    it('GET scenario by id returns avatars', async () => {
+      const { status, body } = await api('GET', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+      expect(body.avatars).toHaveLength(1);
+      expect(body.avatars[0]).toHaveProperty('id', avatarForScenarioId);
     });
 
     // ─── Guest still can't create ──────────────────────────────
@@ -773,14 +800,22 @@ export function describeScenarios() {
       expect(body.data.length).toBe(0);
     });
 
-    // ─── Cleanup MQTT ──────────────────────────────────────────
+    // ─── Cleanup avatar created for scenario-avatar tests ─────
 
-    it('consume remaining events from scenario operations', async () => {
-      await waitForQueuesEmpty();
-      await new Promise((r) => setTimeout(r, 500));
-      aliceUserProcessEvents = [];
-      bobUserProcessEvents = [];
+    it('alice deletes the ScenarioTestAvatar', async () => {
+      const { status } = await api('DELETE', `/avatars/${avatarForScenarioId}`, auth.alice.jwt);
+      expect(status).toBe(200);
     });
+
+    it('aliceUserProcessEvents contains >= 1 Events after avatar cleanup', async () => {
+      await waitForQueuesEmpty(60000);
+      const processEvents = groupByResourceName(aliceUserProcessEvents);
+      const avatars = processEvents.Avatar || [];
+      expect(avatars.length).toBeGreaterThanOrEqual(1);
+      aliceUserProcessEvents = [];
+    });
+
+    // ─── Cleanup MQTT ──────────────────────────────────────────
 
     it('no unprocessed events remaining', async () => {
       await waitForQueuesEmpty();

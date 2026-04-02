@@ -17,6 +17,10 @@ class AvatarsProcessor extends BaseProcessor<Avatar> {
     return { userId: entity.userId };
   }
 
+  protected override async onCreated(_job: Job, avatar: Avatar): Promise<void> {
+    await this.generateIntroductionAudio(avatar);
+  }
+
   protected override getFieldHandlers(_job: Job, avatar: Avatar) {
     return {
       introduction: () => this.generateIntroductionAudio(avatar),

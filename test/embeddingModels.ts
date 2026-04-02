@@ -46,6 +46,8 @@ export function describeEmbeddingModels() {
       expect(status).toBe(200);
       expect(body).toHaveProperty('id');
       expect(body).toHaveProperty('providerModelName', 'all-minilm:22m');
+      expect(body).toHaveProperty('info', 'All-MiniLM 22M - tiny and fast embedding model (46MB)');
+      expect(body).toHaveProperty('recommended', false);
       expect(body).toHaveProperty('aiProviderId', ollama.id);
       embeddingModelId = body.id;
     });
@@ -170,6 +172,8 @@ export function describeEmbeddingModels() {
     it('consume remaining events from embedding model operations', async () => {
       await waitForQueuesEmpty();
       await new Promise((r) => setTimeout(r, 500));
+      const events = groupByResourceName(adminUserProcessEvents);
+      expect(events.EmbeddingModel?.length).toBeGreaterThanOrEqual(2);
       adminUserProcessEvents = [];
     });
 

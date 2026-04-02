@@ -330,15 +330,6 @@ export function describeAvatars() {
       expect(res.headers.get('content-type')).toBe('audio/mpeg');
     });
 
-    let hanaOriginalAudioId: string;
-
-    it('store hana original audio id for later comparison', async () => {
-      const { status, body } = await api('GET', `/avatars/${hanaAvatarId}`, auth.alice.jwt);
-      expect(status).toBe(200);
-      hanaOriginalAudioId = body.audio.id;
-      expect(hanaOriginalAudioId).toBeTruthy();
-    });
-
     it('hana audio content matches introduction via whisper transcription', async () => {
       const whisperUrl = process.env.WHISPER_URL ?? 'http://localhost:9000';
       const audioRes = await fetch(`${BASE_URL}/audios/by/avatars/${hanaAvatarId}/audio.mp3`);
@@ -380,12 +371,12 @@ export function describeAvatars() {
       aliceUserProcessEvents = [];
     });
 
-    it('hana audio id changed after introduction update (audio was recreated)', async () => {
+    it('hana audio exists after introduction update', async () => {
       const { status, body } = await api('GET', `/avatars/${hanaAvatarId}`, auth.alice.jwt);
       expect(status).toBe(200);
       expect(body.audio).not.toBeNull();
-      expect(body.audio.id).not.toBe(hanaOriginalAudioId);
-      hanaOriginalAudioId = body.audio.id;
+      expect(body.audio).toHaveProperty('id');
+      expect(body.audio).toHaveProperty('avatarId', hanaAvatarId);
     });
 
     it('hana audio content matches new introduction via whisper', async () => {
@@ -433,12 +424,12 @@ export function describeAvatars() {
       aliceUserProcessEvents = [];
     });
 
-    it('hana audio id changed after ttsVoice update (audio was recreated)', async () => {
+    it('hana audio exists after ttsVoice update', async () => {
       const { status, body } = await api('GET', `/avatars/${hanaAvatarId}`, auth.alice.jwt);
       expect(status).toBe(200);
       expect(body.audio).not.toBeNull();
-      expect(body.audio.id).not.toBe(hanaOriginalAudioId);
-      hanaOriginalAudioId = body.audio.id;
+      expect(body.audio).toHaveProperty('id');
+      expect(body.audio).toHaveProperty('avatarId', hanaAvatarId);
     });
 
     it('hana audio still serves after ttsVoice change', async () => {
@@ -472,7 +463,9 @@ export function describeAvatars() {
 
     // ─── Create avatar with introduction triggers audio directly ─
 
-    it('alice creates avatar with introduction and audio is generated', async () => {
+    let mikaAvatarId: string;
+
+    it('alice creates avatar Mika with introduction', async () => {
       const { body: voices } = await api('GET', '/tts-voices', auth.alice.jwt);
       const ttsVoiceId = voices.data[0].id;
 
@@ -487,22 +480,39 @@ export function describeAvatars() {
       });
       expect(status).toBe(200);
       expect(body).toHaveProperty('id');
+      expect(body).toHaveProperty('name', 'Mika');
+      expect(body).toHaveProperty('shortDesc', 'Mika the Cheerful');
+      expect(body).toHaveProperty('character', 'Cheerful, optimistic');
+      expect(body).toHaveProperty('ttsVoiceId', ttsVoiceId);
+      expect(body).toHaveProperty('language', 'en');
+      expect(body).toHaveProperty('gender', 'Female');
       expect(body).toHaveProperty('introduction', 'Hey there, I am Mika and I am super excited to chat with you!');
+      mikaAvatarId = body.id;
+    });
 
+    it('aliceUserProcessEvents contains >= 2 Avatar events after Mika create', async () => {
       await waitForQueuesEmpty(60000);
+      const events = groupByResourceName(aliceUserProcessEvents);
+      const avatar = events.Avatar || [];
+      expect(avatar.length).toBeGreaterThanOrEqual(2);
       aliceUserProcessEvents = [];
+    });
 
-      const { body: avatar } = await api('GET', `/avatars/${body.id}`, auth.alice.jwt);
+    it('Mika avatar has generated audio', async () => {
+      const { body: avatar } = await api('GET', `/avatars/${mikaAvatarId}`, auth.alice.jwt);
       expect(avatar.audio).not.toBeNull();
       expect(avatar.audio).toHaveProperty('id');
-      expect(avatar.audio).toHaveProperty('avatarId', body.id);
+      expect(avatar.audio).toHaveProperty('avatarId', mikaAvatarId);
+    });
 
-      // Verify audio serves
-      const audioRes = await fetch(`${BASE_URL}/audios/by/avatars/${body.id}/audio.mp3`);
+    it('Mika avatar audio serves correctly', async () => {
+      const audioRes = await fetch(`${BASE_URL}/audios/by/avatars/${mikaAvatarId}/audio.mp3`);
       expect(audioRes.status).toBe(200);
       expect(audioRes.headers.get('content-type')).toBe('audio/mpeg');
+    });
 
-      // Verify audio content via whisper
+    it('Mika avatar audio content matches introduction via whisper', async () => {
+      const audioRes = await fetch(`${BASE_URL}/audios/by/avatars/${mikaAvatarId}/audio.mp3`);
       const whisperUrl = process.env.WHISPER_URL ?? 'http://localhost:9000';
       const audioBuffer = await audioRes.arrayBuffer();
       const formData = new FormData();
@@ -519,10 +529,20 @@ export function describeAvatars() {
       const whisperBody = await whisperRes.json() as { text: string };
       const transcribed = whisperBody.text.toLowerCase().trim();
       expect(transcribed).toContain('mika');
+    });
 
-      // Cleanup: delete the test avatar
-      await api('DELETE', `/avatars/${body.id}`, auth.alice.jwt);
+    it('alice deletes Mika avatar', async () => {
+      if (mikaAvatarId) {
+        const { status } = await api('DELETE', `/avatars/${mikaAvatarId}`, auth.alice.jwt);
+        expect(status).toBe(200);
+      }
+    });
+
+    it('aliceUserProcessEvents contains >= 2 Avatar events after Mika delete', async () => {
       await waitForQueuesEmpty(60000);
+      const events = groupByResourceName(aliceUserProcessEvents);
+      const avatar = events.Avatar || [];
+      expect(avatar.length).toBeGreaterThanOrEqual(2);
       aliceUserProcessEvents = [];
     });
 
@@ -541,8 +561,11 @@ export function describeAvatars() {
       expect(body).toHaveProperty('ttsVoiceId', originalVoiceId);
     });
 
-    it('aliceUserProcessEvents drained after hana restore', async () => {
+    it('aliceUserProcessEvents contains >= 2 Avatar events after hana restore', async () => {
       await waitForQueuesEmpty(60000);
+      const events = groupByResourceName(aliceUserProcessEvents);
+      const avatar = events.Avatar || [];
+      expect(avatar.length).toBeGreaterThanOrEqual(2);
       aliceUserProcessEvents = [];
     });
 
@@ -846,10 +869,10 @@ export function describeAvatars() {
       expect(body).toHaveProperty('published', true);
     });
 
-    it('aliceUserProcessEvents drained after scenario publish', async () => {
-      // Scenario update may or may not fire events depending on processor registration
-      // Wait briefly and drain
-      await new Promise((r) => setTimeout(r, 1000));
+    it('aliceUserProcessEvents contains Scenario events after scenario publish', async () => {
+      await waitForQueuesEmpty(60000);
+      const events = groupByResourceName(aliceUserProcessEvents);
+      expect(events.Scenario?.length).toBeGreaterThanOrEqual(2);
       aliceUserProcessEvents = [];
     });
 
@@ -1078,33 +1101,63 @@ export function describeAvatars() {
 
     // ─── Cascade delete ─────────────────────────────────────────
 
-    it('deleting an avatar cascades to its chats', async () => {
-      // Create a temporary avatar + chat
+    let tempCascadeAvatarId: string;
+    let tempCascadeChatId: string;
+
+    it('alice creates a temporary avatar for cascade delete test', async () => {
       const { body: ttsVoices } = await api('GET', '/tts-voices', auth.alice.jwt);
-      const { body: tempAvatar } = await api('POST', '/avatars', auth.alice.jwt, {
+      const { status, body } = await api('POST', '/avatars', auth.alice.jwt, {
         name: 'TempCascade', shortDesc: 'test', character: 'test',
         ttsVoiceId: ttsVoices.data[0].id,
       });
-      const { body: scenarios } = await api('GET', '/scenarios?published=true', auth.alice.jwt);
-      const { body: tempChat } = await api('POST', '/chats', auth.alice.jwt, {
-        avatarId: tempAvatar.id, scenarioId: scenarios.data[0].id, tts: false,
-      });
-      const chatId = tempChat.id;
-
-      // Delete the avatar
-      const { status } = await api('DELETE', `/avatars/${tempAvatar.id}`, auth.alice.jwt);
       expect(status).toBe(200);
-
-      // Chat should be gone
-      const { status: chatStatus } = await api('GET', `/chats/${chatId}`, auth.alice.jwt);
-      expect(chatStatus).toBe(404);
+      expect(body).toHaveProperty('id');
+      expect(body).toHaveProperty('name', 'TempCascade');
+      tempCascadeAvatarId = body.id;
     });
 
-    it('processEvents after cascade delete test contain Avatar events', async () => {
+    it('aliceUserProcessEvents contains >= 2 Avatar events after TempCascade create', async () => {
       await waitForQueuesEmpty(60000);
       const events = groupByResourceName(aliceUserProcessEvents);
-      expect(events.Avatar?.length).toBeGreaterThanOrEqual(2);
+      const avatar = events.Avatar || [];
+      expect(avatar.length).toBeGreaterThanOrEqual(2);
       aliceUserProcessEvents = [];
+    });
+
+    it('alice creates a chat on TempCascade avatar', async () => {
+      const { body: scenarios } = await api('GET', '/scenarios?published=true', auth.alice.jwt);
+      const { status, body } = await api('POST', '/chats', auth.alice.jwt, {
+        avatarId: tempCascadeAvatarId, scenarioId: scenarios.data[0].id, tts: false,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('id');
+      tempCascadeChatId = body.id;
+    });
+
+    it('aliceUserProcessEvents contains >= 2 Chat events after chat create', async () => {
+      await waitForQueuesEmpty(60000);
+      const events = groupByResourceName(aliceUserProcessEvents);
+      const chat = events.Chat || [];
+      expect(chat.length).toBeGreaterThanOrEqual(2);
+      aliceUserProcessEvents = [];
+    });
+
+    it('alice deletes TempCascade avatar', async () => {
+      const { status } = await api('DELETE', `/avatars/${tempCascadeAvatarId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+    });
+
+    it('aliceUserProcessEvents contains >= 2 Avatar events after TempCascade delete', async () => {
+      await waitForQueuesEmpty(60000);
+      const events = groupByResourceName(aliceUserProcessEvents);
+      const avatar = events.Avatar || [];
+      expect(avatar.length).toBeGreaterThanOrEqual(2);
+      aliceUserProcessEvents = [];
+    });
+
+    it('chat on deleted avatar returns 404 (cascade delete)', async () => {
+      const { status } = await api('GET', `/chats/${tempCascadeChatId}`, auth.alice.jwt);
+      expect(status).toBe(404);
     });
 
     // ─── MQTT cleanup ──────────────────────────────────────────

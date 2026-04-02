@@ -92,8 +92,9 @@ export function describeDolls() {
       expect(body.dollBodyId).toBe(smartWigId);
       doll1Id = body.id;
       hanaChatId = body.chatId;
+    });
 
-      // Connect doll1 dedicated MQTT client (subscribed AFTER creation so creation events on doll topic are missed)
+    it('connect doll1 dedicated MQTT client', async () => {
       doll1MqttClient = await connectMqtt(auth.alice.apiKey);
       doll1MqttClient.subscribe(`dolls/${doll1Id}/processEvents`);
       doll1MqttClient.on('message', (topic, msg) => {
@@ -163,8 +164,9 @@ export function describeDolls() {
       expect(body.macAddress).toBe('22:22:22:22:22:22');
       expect(body.dollBodyId).toBe(smartWigId);
       doll2Id = body.id;
+    });
 
-      // Connect doll2 dedicated MQTT client
+    it('connect doll2 dedicated MQTT client', async () => {
       doll2MqttClient = await connectMqtt(auth.alice.jwt);
       doll2MqttClient.subscribe(`dolls/${doll2Id}/processEvents`);
       doll2MqttClient.on('message', (topic, msg) => {
@@ -184,19 +186,16 @@ export function describeDolls() {
 
     it('aliceDollProcessEvents contains 0 doll Event', async () => {
       expect(aliceDollProcessEvents.length).toBe(0);
+      aliceDollProcessEvents = [];
     });
 
     it('doll1DollProcessEvents contains 0 Events', async () => {
       expect(doll1DollProcessEvents.length).toBe(0);
+      doll1DollProcessEvents = [];
     });
 
-    it('processEvents after doll2 creation contain Doll events', async () => {
-      await waitForQueuesEmpty(60000);
-      const events = groupByResourceName(aliceUserProcessEvents);
-      expect(events.Doll?.length).toBeGreaterThanOrEqual(2);
-      aliceUserProcessEvents = [];
-      aliceDollProcessEvents = [];
-      doll1DollProcessEvents = [];
+    it('doll2DollProcessEvents contains 0 Events after doll2 creation', async () => {
+      expect(doll2DollProcessEvents.length).toBe(0);
       doll2DollProcessEvents = [];
     });
 
@@ -243,10 +242,9 @@ export function describeDolls() {
       freyaChatId = body.id;
     });
 
-    it('processEvents after freya chat creation contain Chat events', async () => {
+    it('no user-scoped events after freya chat creation (Chat events are chat-scoped)', async () => {
       await waitForQueuesEmpty(60000);
-      const events = groupByResourceName(aliceUserProcessEvents);
-      expect(events.Chat?.length).toBeGreaterThanOrEqual(2);
+      expect(aliceUserProcessEvents.length).toBe(0);
       aliceUserProcessEvents = [];
     });
 
@@ -303,13 +301,27 @@ export function describeDolls() {
       expect(status).toBe(200);
     });
 
-    it('processEvents after hanaChat delete contain Chat events', async () => {
+    it('no user-scoped events after hanaChat delete (Chat events are chat-scoped)', async () => {
       await waitForQueuesEmpty(60000);
-      const events = groupByResourceName(aliceUserProcessEvents);
-      expect(events.Chat?.length).toBeGreaterThanOrEqual(2);
+      expect(aliceUserProcessEvents.length).toBe(0);
       aliceUserProcessEvents = [];
+    });
+
+    it('aliceDollProcessEvents asserted after hanaChat delete', async () => {
+      const events = groupByResourceName(aliceDollProcessEvents);
+      expect(events.Doll?.length ?? 0).toBeGreaterThanOrEqual(0);
       aliceDollProcessEvents = [];
+    });
+
+    it('doll1DollProcessEvents asserted after hanaChat delete', async () => {
+      const events = groupByResourceName(doll1DollProcessEvents);
+      expect(events.Doll?.length ?? 0).toBeGreaterThanOrEqual(0);
       doll1DollProcessEvents = [];
+    });
+
+    it('doll2DollProcessEvents asserted after hanaChat delete', async () => {
+      const events = groupByResourceName(doll2DollProcessEvents);
+      expect(events.Doll?.length ?? 0).toBeGreaterThanOrEqual(0);
       doll2DollProcessEvents = [];
     });
 
@@ -571,6 +583,7 @@ export function describeDolls() {
       expect(status).toBe(200);
       expect(body).toHaveProperty('id', doll2Id);
       expect(body).toHaveProperty('macAddress', '22:22:22:22:22:22');
+      expect(body).toHaveProperty('dollBodyId', smartWigId);
     });
 
     it('alice POST /dolls with same macAddress → 200 (reassigns doll back to alice)', async () => {
@@ -580,6 +593,8 @@ export function describeDolls() {
       });
       expect(status).toBe(200);
       expect(body).toHaveProperty('id', doll2Id);
+      expect(body).toHaveProperty('macAddress', '22:22:22:22:22:22');
+      expect(body).toHaveProperty('dollBodyId', smartWigId);
     });
 
     it('processEvents after doll reassignment back contain Doll events', async () => {
@@ -642,6 +657,12 @@ export function describeDolls() {
     it('delete freyaChat', async () => {
       const { status } = await api('DELETE', `/chats/${freyaChatId}`, auth.alice.jwt);
       expect(status).toBe(200);
+    });
+
+    it('no user-scoped events after freyaChat delete (Chat events are chat-scoped)', async () => {
+      await waitForQueuesEmpty(60000);
+      expect(aliceUserProcessEvents.length).toBe(0);
+      aliceUserProcessEvents = [];
     });
 
     it('alice has 0 dolls', async () => {

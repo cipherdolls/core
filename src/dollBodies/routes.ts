@@ -1,6 +1,6 @@
 import { Body } from '../helpers/schema';
 import { Elysia, t } from 'elysia';
-import { prisma } from '../db';
+import { prisma, model } from '../db';
 import { jwtGuard } from '../auth/jwt';
 import { requireAdmin } from '../helpers/admin';
 import { parsePagination, paginationMeta } from '../helpers/pagination';
@@ -39,7 +39,7 @@ export const dollBodiesRoutes = new Elysia({ prefix: '/doll-bodies' })
     '/',
     async ({ user, body, set }) => {
       requireAdmin(user, set);
-      return prisma.dollBody.create({
+      return model.dollBody.create({
         data: {
           name: body.name,
           description: body.description,
@@ -67,7 +67,7 @@ export const dollBodiesRoutes = new Elysia({ prefix: '/doll-bodies' })
       requireAdmin(user, set);
       const item = await prisma.dollBody.findUnique({ where: { id: params.id } });
       if (!item) { set.status = 404; return { error: 'Not found' }; }
-      return prisma.dollBody.update({
+      return model.dollBody.update({
         where: { id: params.id },
         data: {
           ...(body.name !== undefined ? { name: body.name } : {}),
@@ -76,7 +76,7 @@ export const dollBodiesRoutes = new Elysia({ prefix: '/doll-bodies' })
           ...(body.productUrl !== undefined ? { productUrl: body.productUrl } : {}),
           ...(body.published !== undefined ? { published: body.published } : {}),
         },
-      });
+      }, item);
     },
     {
       body: Body({
@@ -94,5 +94,5 @@ export const dollBodiesRoutes = new Elysia({ prefix: '/doll-bodies' })
     requireAdmin(user, set);
     const item = await prisma.dollBody.findUnique({ where: { id: params.id } });
     if (!item) { set.status = 404; return { error: 'Not found' }; }
-    return prisma.dollBody.delete({ where: { id: params.id } });
+    return model.dollBody.delete({ where: { id: params.id } });
   });

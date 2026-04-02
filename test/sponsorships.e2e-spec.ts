@@ -7,6 +7,8 @@ import { describeReasoningModels } from './reasoningModels';
 import { describeScenarios } from './scenarios';
 import { describeSponsorships } from './sponsorships';
 import { describeTokenPermits } from './tokenPermits';
+import { describeTtsProviders } from './ttsProviders';
+import { describeTtsVoices } from './ttsVoices';
 import { setBeforeAll, setAfterAll } from './setup';
 describe('sponsorships Controller (e2e)', () => {
   setBeforeAll();
@@ -17,6 +19,8 @@ describe('sponsorships Controller (e2e)', () => {
   describeChatModels();
   describeEmbeddingModels();
   describeReasoningModels();
+  describeTtsProviders();
+  describeTtsVoices();
   describeScenarios();
   describeSponsorships();
 

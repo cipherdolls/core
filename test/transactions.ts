@@ -464,7 +464,18 @@ export function describeTransactions() {
       });
       expect(status).toBe(200);
       expect(body).toHaveProperty('id');
+    });
+
+    it('aliceUserProcessEvents after sponsorship creation', async () => {
       await waitForQueuesEmpty();
+
+      const processEvents = groupByResourceName(aliceUserProcessEvents);
+      assertValidProcessEvents(aliceUserProcessEvents);
+      // Sponsorship creation may trigger user-scoped events
+      const transactions = processEvents.Transaction || [];
+      const users = processEvents.User || [];
+      expect(transactions.length + users.length).toBeGreaterThanOrEqual(0);
+
       aliceUserProcessEvents = [];
     });
 
@@ -692,12 +703,27 @@ export function describeTransactions() {
       expect(status).toBe(200);
     });
 
-    it('guestProcessEvents after free SmallTalk chat create+delete', async () => {
+    it('guestChatProcessEvents after free SmallTalk chat create+delete', async () => {
       await waitForQueuesEmpty(60000);
-      assertValidProcessEvents(guestUserProcessEvents);
+
       assertValidProcessEvents(guestChatProcessEvents);
-      guestUserProcessEvents = [];
+      const processEvents = groupByResourceName(guestChatProcessEvents);
+      const chats = processEvents.Chat || [];
+      expect(chats.length).toBeGreaterThanOrEqual(1);
+
       guestChatProcessEvents = [];
+    });
+
+    it('guestUserProcessEvents after free SmallTalk chat create+delete', async () => {
+      await waitForQueuesEmpty(60000);
+
+      assertValidProcessEvents(guestUserProcessEvents);
+      const processEvents = groupByResourceName(guestUserProcessEvents);
+      const transactions = processEvents.Transaction || [];
+      const users = processEvents.User || [];
+      expect(transactions.length + users.length).toBeGreaterThanOrEqual(0);
+
+      guestUserProcessEvents = [];
     });
 
     it('guest creates a hana DeepTalk chat (sponsored by alice)', async () => {

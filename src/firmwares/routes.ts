@@ -1,6 +1,6 @@
 import { Body } from '../helpers/schema';
 import { Elysia, t } from 'elysia';
-import { prisma } from '../db';
+import { prisma, model } from '../db';
 import { jwtGuard } from '../auth/jwt';
 import { requireAdmin } from '../helpers/admin';
 import { parsePagination, paginationMeta } from '../helpers/pagination';
@@ -34,7 +34,7 @@ export const firmwaresRoutes = new Elysia({ prefix: '/firmwares' })
     '/',
     async ({ user, body, set }) => {
       requireAdmin(user, set);
-      return prisma.firmware.create({
+      return model.firmware.create({
         data: {
           version: body.version,
           dollBody: { connect: { id: body.dollBodyId } },

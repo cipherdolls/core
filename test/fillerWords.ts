@@ -164,9 +164,12 @@ export function describeFillerWords() {
 
     // ─── MQTT cleanup ───────────────────────────────────────────
 
-    it('consume remaining events', async () => {
+    it('consume remaining events from filler word operations', async () => {
       await waitForQueuesEmpty();
       await new Promise((r) => setTimeout(r, 500));
+      const events = groupByResourceName(aliceUserProcessEvents);
+      const fillerWord = events.FillerWord || [];
+      expect(fillerWord.length).toBeGreaterThanOrEqual(2);
       aliceUserProcessEvents = [];
     });
 

@@ -48,6 +48,10 @@ export function describeReasoningModels() {
       expect(status).toBe(200);
       expect(body).toHaveProperty('id');
       expect(body).toHaveProperty('providerModelName', 'phi4-mini-reasoning');
+      expect(body).toHaveProperty('info', 'Microsoft Phi-4 Mini Reasoning - compact reasoning model with chain-of-thought (2.8GB)');
+      expect(body).toHaveProperty('contextWindow', 128000);
+      expect(body).toHaveProperty('censored', false);
+      expect(body).toHaveProperty('recommended', false);
       expect(body).toHaveProperty('aiProviderId', ollama.id);
       reasoningModelId = body.id;
     });
@@ -172,6 +176,8 @@ export function describeReasoningModels() {
     it('consume remaining events from reasoning model operations', async () => {
       await waitForQueuesEmpty();
       await new Promise((r) => setTimeout(r, 500));
+      const events = groupByResourceName(adminUserProcessEvents);
+      expect(events.ReasoningModel?.length).toBeGreaterThanOrEqual(2);
       adminUserProcessEvents = [];
     });
 

@@ -128,9 +128,11 @@ export function describeChatCompletionJobs() {
       expect(status).toBe(200);
     });
 
-    it('consume remaining events', async () => {
+    it('consume remaining events from chatCompletionJob operations', async () => {
       await waitForQueuesEmpty();
       await new Promise((r) => setTimeout(r, 500));
+      const events = groupByResourceName(aliceChatProcessEvents);
+      expect(Object.keys(events).length).toBeGreaterThanOrEqual(0);
       aliceChatProcessEvents = [];
     });
 

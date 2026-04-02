@@ -204,6 +204,8 @@ export function describeSponsorships() {
       const events = groupByResourceName(aliceUserProcessEvents);
       const sponsorshipEvents = events.Sponsorship || [];
       expect(sponsorshipEvents.length).toBeGreaterThanOrEqual(2);
+      expect(sponsorshipEvents.some((e: ProcessEvent) => e.jobStatus === 'active')).toBe(true);
+      expect(sponsorshipEvents.some((e: ProcessEvent) => e.jobStatus === 'completed')).toBe(true);
       aliceUserProcessEvents = [];
     });
 
@@ -242,6 +244,7 @@ export function describeSponsorships() {
     // ─── Re-create sponsorship for downstream tests ──────────
 
     it('alice post a sponsorship again', async () => {
+      aliceUserProcessEvents = [];
       const { status, body } = await api('POST', '/sponsorships', auth.alice.jwt, {
         scenarioId: bobDeepTalkScenarioId,
       });
@@ -250,6 +253,16 @@ export function describeSponsorships() {
       expect(body).toHaveProperty('scenarioId', bobDeepTalkScenarioId);
       expect(body).toHaveProperty('userId', auth.alice.userId);
       aliceSponsorshipId = body.id;
+    });
+
+    it('aliceUserProcessEvents contains >= 2 Events after sponsorship re-create', async () => {
+      await waitForQueuesEmpty(60000);
+      const events = groupByResourceName(aliceUserProcessEvents);
+      const sponsorshipEvents = events.Sponsorship || [];
+      expect(sponsorshipEvents.length).toBeGreaterThanOrEqual(2);
+      expect(sponsorshipEvents.some((e: ProcessEvent) => e.jobStatus === 'active')).toBe(true);
+      expect(sponsorshipEvents.some((e: ProcessEvent) => e.jobStatus === 'completed')).toBe(true);
+      aliceUserProcessEvents = [];
     });
 
     // ─── Auto-remove sponsorship when tokenSpendable < 1 ─────
@@ -270,6 +283,10 @@ export function describeSponsorships() {
     it('wait for user processor to auto-remove sponsorship', async () => {
       await waitForQueuesEmpty();
       await new Promise((r) => setTimeout(r, 500));
+      const events = groupByResourceName(aliceUserProcessEvents);
+      const userEvents = events.User || [];
+      expect(userEvents.length).toBeGreaterThanOrEqual(1);
+      aliceUserProcessEvents = [];
     });
 
     it('alice sponsorship was auto-removed', async () => {
@@ -278,12 +295,19 @@ export function describeSponsorships() {
     });
 
     it('restore alice tokenSpendable', async () => {
+      aliceUserProcessEvents = [];
       const { status } = await api('PATCH', `/users/${auth.alice.userId}`, auth.admin.jwt, {
         tokenSpendable: 3.25,
       });
       expect(status).toBe(200);
+    });
+
+    it('aliceUserProcessEvents contains events after tokenSpendable restore', async () => {
       await waitForQueuesEmpty();
       await new Promise((r) => setTimeout(r, 500));
+      const events = groupByResourceName(aliceUserProcessEvents);
+      const userEvents = events.User || [];
+      expect(userEvents.length).toBeGreaterThanOrEqual(1);
       aliceUserProcessEvents = [];
     });
 
@@ -292,7 +316,8 @@ export function describeSponsorships() {
     it('consume remaining events', async () => {
       await waitForQueuesEmpty();
       await new Promise((r) => setTimeout(r, 500));
-      aliceUserProcessEvents = [];
+      // assert no unexpected events accumulated since last clear
+      expect(aliceUserProcessEvents.length).toBe(0);
     });
 
     it('no unprocessed events remaining', async () => {

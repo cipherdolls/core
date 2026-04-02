@@ -121,6 +121,7 @@ export function describeChats() {
       });
       expect(status).toBe(200);
       expect(body).toHaveProperty('id');
+      expect(body).toHaveProperty('scenarioId', smallTalkScenarioId);
       guestFreeChatId = body.id;
     });
 
@@ -172,6 +173,9 @@ export function describeChats() {
         tts: false,
       });
       expect(status).toBe(200);
+      expect(body).toHaveProperty('id');
+      expect(body).toHaveProperty('scenarioId', smallTalkScenarioId);
+      expect(body).toHaveProperty('tts', false);
       paidAvatarChatId = body.id;
     });
 
@@ -256,6 +260,7 @@ export function describeChats() {
       });
       expect(status).toBe(200);
       expect(body).toHaveProperty('id');
+      expect(body).toHaveProperty('scenarioId', paidScenarioId);
       guestSponsoredChatId = body.id;
     });
 
@@ -295,6 +300,10 @@ export function describeChats() {
       await waitForQueuesEmpty(60000);
       assertValidProcessEvents(aliceUserProcessEvents);
       assertValidProcessEvents(aliceChatProcessEvents);
+      const aliceUserEvents = groupByResourceName(aliceUserProcessEvents);
+      const aliceChatEvents = groupByResourceName(aliceChatProcessEvents);
+      expect(aliceUserEvents).toBeDefined();
+      expect(aliceChatEvents).toBeDefined();
       aliceUserProcessEvents = [];
       aliceChatProcessEvents = [];
       bobUserProcessEvents = [];
@@ -349,7 +358,13 @@ export function describeChats() {
     it('alice refreshes hanaChat system-prompt', async () => {
       const { status } = await api('PATCH', `/chats/${hanaChatId}`, auth.alice.jwt, { action: 'RefreshSystemPrompt' });
       expect(status).toBe(200);
+    });
+
+    it('aliceChatProcessEvents after hanaChat refresh', async () => {
       await waitForQueuesEmpty();
+      const events = groupByResourceName(aliceChatProcessEvents);
+      expect(events.Chat).toBeDefined();
+      aliceChatProcessEvents = [];
     });
 
     it('alice get the hanaChat system-prompt', async () => {
@@ -567,7 +582,13 @@ export function describeChats() {
     it('alice refreshes joiChat system-prompt', async () => {
       const { status } = await api('PATCH', `/chats/${joiChatId}`, auth.alice.jwt, { action: 'RefreshSystemPrompt' });
       expect(status).toBe(200);
+    });
+
+    it('aliceChatProcessEvents after joiChat refresh', async () => {
       await waitForQueuesEmpty();
+      const events = groupByResourceName(aliceChatProcessEvents);
+      expect(events.Chat).toBeDefined();
+      aliceChatProcessEvents = [];
     });
 
     it('alice get the joiChat system-prompt', async () => {
@@ -736,6 +757,16 @@ export function describeChats() {
       expect(body).toHaveProperty('sttProviderId', sttProviderId);
     });
 
+    it('aliceChatProcessEvents after joiChat sttProvider update', async () => {
+      await waitForQueuesEmpty(60000);
+      const events = groupByResourceName(aliceChatProcessEvents);
+      const chatEvents = events.Chat || [];
+      expect(chatEvents.length).toBeGreaterThanOrEqual(2);
+      expect(chatEvents.some((e: ProcessEvent) => e.jobStatus === 'active')).toBe(true);
+      expect(chatEvents.some((e: ProcessEvent) => e.jobStatus === 'completed')).toBe(true);
+      aliceChatProcessEvents = [];
+    });
+
     // ─── Create + delete custom joi chat ────────────────────────
 
     let customJoiChatId: string;
@@ -885,14 +916,20 @@ export function describeChats() {
       expect(body.tokenSpendable).toBe(0);
     });
 
+    let guestFreeChatId2: string;
     it('guest can still create a chat with free scenario + free avatar', async () => {
       const { status, body } = await api('POST', '/chats', auth.guest.jwt, {
         avatarId: hanaId,
         scenarioId: smallTalkScenarioId,
       });
       expect(status).toBe(200);
-      // Clean up immediately
-      await api('DELETE', `/chats/${body.id}`, auth.guest.jwt);
+      expect(body).toHaveProperty('id');
+      expect(body).toHaveProperty('scenarioId', smallTalkScenarioId);
+      guestFreeChatId2 = body.id;
+    });
+
+    it('guest deletes the free chat after token balance test', async () => {
+      await api('DELETE', `/chats/${guestFreeChatId2}`, auth.guest.jwt);
     });
 
     // ─── Alien ROLEPLAY chat ────────────────────────────────────
@@ -935,7 +972,12 @@ export function describeChats() {
     it('alice refreshes alien chat system-prompt', async () => {
       const { status } = await api('PATCH', `/chats/${alienChatId}`, auth.alice.jwt, { action: 'RefreshSystemPrompt' });
       expect(status).toBe(200);
+    });
+
+    it('aliceChatProcessEvents after alien chat refresh', async () => {
       await waitForQueuesEmpty();
+      const events = groupByResourceName(aliceChatProcessEvents);
+      expect(events.Chat).toBeDefined();
       aliceChatProcessEvents = [];
     });
 

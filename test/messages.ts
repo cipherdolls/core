@@ -112,6 +112,8 @@ export function describeMessages() {
       });
       expect(status).toBe(200);
       expect(body).toHaveProperty('id');
+      expect(body).toHaveProperty('content', "Can I take a shower first? I'm sweaty from work.");
+      expect(body).toHaveProperty('chatId', joiChatId);
     });
 
     // ─── Get messages (cursor pagination) ──────────────────────
@@ -220,31 +222,48 @@ export function describeMessages() {
       expect(body.meta.total).toBe(0);
     });
 
-    it('alice cannot read messages from bob chat', async () => {
-      // Create a temporary chat for bob
+    let bobChatId: string;
+
+    it('bob creates a temporary chat for cross-user message tests', async () => {
       const { body: avatars } = await api('GET', '/avatars?published=true', auth.bob.jwt);
       const { body: scenarios } = await api('GET', '/scenarios?published=true', auth.bob.jwt);
-      const { body: bobChat } = await api('POST', '/chats', auth.bob.jwt, {
+      const { status, body } = await api('POST', '/chats', auth.bob.jwt, {
         avatarId: avatars.data[0].id,
         scenarioId: scenarios.data[0].id,
         tts: false,
       });
-      // Bob posts a message
-      await api('POST', '/messages', auth.bob.jwt, {
-        chatId: bobChat.id,
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('id');
+      bobChatId = body.id;
+    });
+
+    it('bob posts a private message to his chat', async () => {
+      const { status, body } = await api('POST', '/messages', auth.bob.jwt, {
+        chatId: bobChatId,
         content: 'This is private to bob',
       });
-      // Alice tries to read bob's chat messages — gets empty
-      const { status, body } = await api('GET', `/messages?chatId=${bobChat.id}`, auth.alice.jwt);
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('id');
+      expect(body).toHaveProperty('content', 'This is private to bob');
+      expect(body).toHaveProperty('chatId', bobChatId);
+    });
+
+    it('alice cannot read messages from bob chat', async () => {
+      const { status, body } = await api('GET', `/messages?chatId=${bobChatId}`, auth.alice.jwt);
       expect(status).toBe(200);
       expect(body.data.length).toBe(0);
       expect(body.meta.total).toBe(0);
-      // Bob can read his own messages
-      const { body: bobMsgs } = await api('GET', `/messages?chatId=${bobChat.id}`, auth.bob.jwt);
+    });
+
+    it('bob can read his own chat messages', async () => {
+      const { body: bobMsgs } = await api('GET', `/messages?chatId=${bobChatId}`, auth.bob.jwt);
       expect(bobMsgs.data.length).toBeGreaterThan(0);
       expect(bobMsgs.meta.total).toBeGreaterThan(0);
-      // Cleanup
-      await api('DELETE', `/chats/${bobChat.id}`, auth.bob.jwt);
+    });
+
+    it('cleanup bob temporary chat', async () => {
+      const { status } = await api('DELETE', `/chats/${bobChatId}`, auth.bob.jwt);
+      expect(status).toBe(200);
     });
 
     it('bob cannot POST a message to alice joiChat', async () => {
@@ -267,13 +286,22 @@ export function describeMessages() {
 
     // ─── PATCH message ──────────────────────────────────────────
 
-    it('alice can update her message content', async () => {
-      // Post a message first
-      const { body: msg } = await api('POST', '/messages', auth.alice.jwt, {
+    let patchTestMessageId: string;
+
+    it('alice posts a message for PATCH testing', async () => {
+      const { status, body } = await api('POST', '/messages', auth.alice.jwt, {
         chatId: joiChatId,
         content: 'original content',
       });
-      const { status, body } = await api('PATCH', `/messages/${msg.id}`, auth.alice.jwt, {
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('id');
+      expect(body).toHaveProperty('content', 'original content');
+      expect(body).toHaveProperty('chatId', joiChatId);
+      patchTestMessageId = body.id;
+    });
+
+    it('alice can update her message content', async () => {
+      const { status, body } = await api('PATCH', `/messages/${patchTestMessageId}`, auth.alice.jwt, {
         content: 'updated content',
       });
       expect(status).toBe(200);
@@ -306,6 +334,9 @@ export function describeMessages() {
         content: 'This message will be deleted',
       });
       expect(status).toBe(200);
+      expect(body).toHaveProperty('id');
+      expect(body).toHaveProperty('content', 'This message will be deleted');
+      expect(body).toHaveProperty('chatId', joiChatId);
       deleteTestMessageId = body.id;
     });
 
@@ -361,6 +392,8 @@ export function describeMessages() {
       });
       expect(status).toBe(200);
       expect(body).toHaveProperty('id');
+      expect(body).toHaveProperty('content', 'What is the capital of Germany?');
+      expect(body).toHaveProperty('chatId', hanaChatId);
     });
 
     it('hanaChat has 2 more messages after Germany question (USER + ASSISTANT)', async () => {
@@ -396,6 +429,8 @@ export function describeMessages() {
       });
       expect(status).toBe(200);
       expect(body).toHaveProperty('id');
+      expect(body).toHaveProperty('content', 'What is the capital of France?');
+      expect(body).toHaveProperty('chatId', hanaChatId);
     });
 
     it('hanaChat has 2 more messages after France question (USER + ASSISTANT)', async () => {
@@ -431,6 +466,8 @@ export function describeMessages() {
       });
       expect(status).toBe(200);
       expect(body).toHaveProperty('id');
+      expect(body).toHaveProperty('content', 'What was my last question?');
+      expect(body).toHaveProperty('chatId', hanaChatId);
     });
 
     it('hanaChat has 2 more messages after history check question (USER + ASSISTANT)', async () => {

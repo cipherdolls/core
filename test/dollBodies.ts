@@ -46,7 +46,10 @@ export function describeDollBodies() {
         avatarId: hanaAvatarId,
       });
       expect(status).toBe(200);
+      expect(body).toHaveProperty('id');
       expect(body).toHaveProperty('name', 'SenseCAP Watcher');
+      expect(body).toHaveProperty('description', 'ESP32-S3 AI sensor with camera, mic, speaker');
+      expect(body).toHaveProperty('avatarId', hanaAvatarId);
       dollBodyId = body.id;
     });
 

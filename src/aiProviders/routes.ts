@@ -1,6 +1,6 @@
 import { Body, pickFields } from '../helpers/schema';
 import { Elysia, t } from 'elysia';
-import { prisma } from '../db';
+import { prisma, model } from '../db';
 import { jwtGuard, optionalJwtGuard } from '../auth/jwt';
 import { requireAdmin } from '../helpers/admin';
 import { parsePagination, paginationMeta } from '../helpers/pagination';
@@ -43,7 +43,7 @@ export const aiProvidersRoutes = new Elysia({ prefix: '/ai-providers' })
   .use(jwtGuard)
   .post('/', async ({ user, body, set }) => {
     requireAdmin(user, set);
-    const item = await prisma.aiProvider.create({ data: { ...body, user: { connect: { id: user.userId } } } });
+    const item = await model.aiProvider.create({ data: { ...body, user: { connect: { id: user.userId } } } });
     return stripApiKey(item);
   }, {
     body: Body({
@@ -57,7 +57,7 @@ export const aiProvidersRoutes = new Elysia({ prefix: '/ai-providers' })
     requireAdmin(user, set);
     const item = await prisma.aiProvider.findUnique({ where: { id: params.id } });
     if (!item) { set.status = 404; return { error: 'Not found' }; }
-    const updated = await prisma.aiProvider.update({ where: { id: params.id }, data: pickFields(body, ['name', 'apiKey', 'basePath']) });
+    const updated = await model.aiProvider.update({ where: { id: params.id }, data: pickFields(body, ['name', 'apiKey', 'basePath']) }, item);
     return stripApiKey(updated);
   }, {
     body: Body({
@@ -71,6 +71,5 @@ export const aiProvidersRoutes = new Elysia({ prefix: '/ai-providers' })
     requireAdmin(user, set);
     const item = await prisma.aiProvider.findUnique({ where: { id: params.id } });
     if (!item) { set.status = 404; return { error: 'Not found' }; }
-    const deleted = await prisma.aiProvider.delete({ where: { id: params.id } });
-    return stripApiKey(deleted);
+    return stripApiKey(await model.aiProvider.delete({ where: { id: params.id } }));
   });

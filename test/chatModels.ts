@@ -49,6 +49,10 @@ export function describeChatModels() {
       expect(status).toBe(200);
       expect(body).toHaveProperty('id');
       expect(body).toHaveProperty('providerModelName', 'llama3.2:1b');
+      expect(body).toHaveProperty('info', 'Meta Llama 3.2 1B - lightweight chat model for edge deployment (1.3GB)');
+      expect(body).toHaveProperty('contextWindow', 128000);
+      expect(body).toHaveProperty('censored', true);
+      expect(body).toHaveProperty('recommended', false);
       expect(body).toHaveProperty('aiProviderId', ollamaChat.id);
       chatModelId = body.id;
     });
@@ -163,41 +167,51 @@ export function describeChatModels() {
       expect(Number(chatModel.dollarPerOutputToken)).toBe(0);
     });
 
-    it('updates chatModel costs and free becomes false', async () => {
+    it('admin updates chatModel costs to non-zero', async () => {
       const res1 = await api('GET', '/chat-models?name=llama3.2:1b', auth.admin.jwt);
       expect(res1.status).toBe(200);
       const chatModel = res1.body.data[0];
 
-      const patchRes = await api('PATCH', `/chat-models/${chatModel.id}`, auth.admin.jwt, {
+      const { status, body } = await api('PATCH', `/chat-models/${chatModel.id}`, auth.admin.jwt, {
         dollarPerInputToken: 0.001,
         dollarPerOutputToken: 0.002,
       });
-      expect(patchRes.status).toBe(200);
-      expect(patchRes.body).toHaveProperty('free', false);
-
-      const res2 = await api('GET', `/chat-models/${chatModel.id}`, auth.admin.jwt);
-      expect(res2.status).toBe(200);
-      expect(res2.body).toHaveProperty('free', false);
-      expect(Number(res2.body.dollarPerInputToken)).toBe(0.001);
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('free', false);
+      expect(Number(body.dollarPerInputToken)).toBe(0.001);
+      expect(Number(body.dollarPerOutputToken)).toBe(0.002);
     });
 
-    it('updates chatModel costs back to zero and free becomes true', async () => {
+    it('chatModel with non-zero costs has free=false', async () => {
+      const res1 = await api('GET', '/chat-models?name=llama3.2:1b', auth.admin.jwt);
+      expect(res1.status).toBe(200);
+      const chatModel = res1.body.data[0];
+      expect(chatModel).toHaveProperty('free', false);
+      expect(Number(chatModel.dollarPerInputToken)).toBe(0.001);
+    });
+
+    it('admin updates chatModel costs back to zero', async () => {
       const res1 = await api('GET', '/chat-models?name=llama3.2:1b', auth.admin.jwt);
       expect(res1.status).toBe(200);
       const chatModel = res1.body.data[0];
 
-      const patchRes = await api('PATCH', `/chat-models/${chatModel.id}`, auth.admin.jwt, {
+      const { status, body } = await api('PATCH', `/chat-models/${chatModel.id}`, auth.admin.jwt, {
         dollarPerInputToken: 0,
         dollarPerOutputToken: 0,
       });
-      expect(patchRes.status).toBe(200);
-      expect(patchRes.body).toHaveProperty('free', true);
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('free', true);
+      expect(Number(body.dollarPerInputToken)).toBe(0);
+      expect(Number(body.dollarPerOutputToken)).toBe(0);
+    });
 
-      const res2 = await api('GET', `/chat-models/${chatModel.id}`, auth.admin.jwt);
-      expect(res2.status).toBe(200);
-      expect(res2.body).toHaveProperty('free', true);
-      expect(Number(res2.body.dollarPerInputToken)).toBe(0);
-      expect(Number(res2.body.dollarPerOutputToken)).toBe(0);
+    it('chatModel with zero costs has free=true', async () => {
+      const res1 = await api('GET', '/chat-models?name=llama3.2:1b', auth.admin.jwt);
+      expect(res1.status).toBe(200);
+      const chatModel = res1.body.data[0];
+      expect(chatModel).toHaveProperty('free', true);
+      expect(Number(chatModel.dollarPerInputToken)).toBe(0);
+      expect(Number(chatModel.dollarPerOutputToken)).toBe(0);
     });
 
     it('gets all chatModels after delete', async () => {
@@ -213,6 +227,8 @@ export function describeChatModels() {
     it('consume remaining events from chat model operations', async () => {
       await waitForQueuesEmpty();
       await new Promise((r) => setTimeout(r, 500));
+      const events = groupByResourceName(adminUserProcessEvents);
+      expect(events.ChatModel?.length).toBeGreaterThanOrEqual(2);
       adminUserProcessEvents = [];
     });
 
