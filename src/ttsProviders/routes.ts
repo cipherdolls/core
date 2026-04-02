@@ -18,7 +18,7 @@ export const ttsProvidersRoutes = new Elysia({ prefix: '/tts-providers' })
         skip,
         take,
         where,
-        include: { picture: true, ttsVoices: { include: { audio: true }, orderBy: [{ recommended: 'desc' }, { name: 'asc' }] }, _count: { select: { ttsVoices: true } } },
+        include: { picture: true, ttsVoices: { include: { audio: true, _count: { select: { avatars: true } } }, orderBy: [{ recommended: 'desc' }, { name: 'asc' }] }, _count: { select: { ttsVoices: true } } },
         orderBy: { name: 'asc' },
       }),
       prisma.ttsProvider.count({ where }),
@@ -29,7 +29,7 @@ export const ttsProvidersRoutes = new Elysia({ prefix: '/tts-providers' })
   .get('/:id', async ({ params, set }) => {
     const item = await prisma.ttsProvider.findUnique({
       where: { id: params.id },
-      include: { picture: true, ttsVoices: { include: { audio: true }, orderBy: [{ recommended: 'desc' }, { name: 'asc' }] }, _count: { select: { ttsVoices: true } } },
+      include: { picture: true, ttsVoices: { include: { audio: true, _count: { select: { avatars: true } } }, orderBy: [{ recommended: 'desc' }, { name: 'asc' }] }, _count: { select: { ttsVoices: true } } },
     });
     if (!item) { set.status = 404; return { error: 'Not found' }; }
     return item;
