@@ -28,7 +28,7 @@ export const dollBodiesRoutes = new Elysia({ prefix: '/doll-bodies' })
   .get('/:id', async ({ params, set }) => {
     const item = await prisma.dollBody.findUnique({
       where: { id: params.id },
-      include: { avatar: true, dolls: true, firmwares: true },
+      include: { avatar: true, dolls: true, firmwares: true, picture: true },
     });
     if (!item) { set.status = 404; return { error: 'Not found' }; }
     return item;
