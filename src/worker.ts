@@ -8,7 +8,7 @@ import { startWatcher, stopWatcher } from './token/watcher';
 // Connect MQTT client so processors can publish events
 startMqttClient();
 
-console.log('Starting worker process...');
+console.log(`Starting worker process... (commit: ${process.env.COMMIT_SHA ?? 'dev'})`);
 startWorkers();
 startWatcher();
 

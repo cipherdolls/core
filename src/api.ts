@@ -85,7 +85,7 @@ process.on('SIGTERM', async () => {
   process.exit(0);
 });
 
-console.log(`API running on http://localhost:${port}`);
+console.log(`API running on http://localhost:${port} (commit: ${process.env.COMMIT_SHA ?? 'dev'})`);
 console.log(`Swagger docs at http://localhost:${port}/api`);
 
 export type App = typeof app;
