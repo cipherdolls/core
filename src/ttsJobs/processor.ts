@@ -39,11 +39,19 @@ class TtsJobsProcessor extends BaseProcessor<TtsJob> {
       const provider = voice.ttsProvider;
 
       publishTtsStart(message.chatId, message.id);
+      let chunkCount = 0;
+      let firstChunkMs = 0;
       const result = await tts(message.content, voice, provider, `${ASSETS_PATH}/messages`, {
         onChunk: (chunk: Buffer) => {
+          chunkCount++;
+          if (chunkCount === 1) {
+            firstChunkMs = Date.now() - startTime;
+            console.log(`[ttsJob] First chunk streamed: ${firstChunkMs}ms, size=${chunk.length} bytes`);
+          }
           publishTtsChunk(message.chatId, chunk);
         },
       });
+      console.log(`[ttsJob] Stream done: ${chunkCount} chunks, first chunk at ${firstChunkMs}ms, total ${Date.now() - startTime}ms`);
       publishTtsEnd(message.chatId, message.id);
 
       // Update message as completed (no file saved when streaming)
