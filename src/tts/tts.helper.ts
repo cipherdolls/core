@@ -42,6 +42,35 @@ async function kokoroTts(text: string, voice: TtsVoice): Promise<Buffer> {
   return Buffer.from(await response.arrayBuffer());
 }
 
+async function kokoroTtsStream(text: string, voice: TtsVoice, onChunk: (chunk: Buffer) => void): Promise<void> {
+  const response = await fetch(`${KOKORO_URL}/v1/audio/speech`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'kokoro',
+      input: text,
+      voice: voice.providerVoiceId,
+      response_format: 'pcm',
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`TTS error (${response.status}) from Kokoro (${KOKORO_URL}), voice ${voice.providerVoiceId}: ${errorText}`);
+  }
+
+  if (!response.body) {
+    throw new Error('Kokoro stream response has no body');
+  }
+
+  const reader = response.body.getReader();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) onChunk(Buffer.from(value));
+  }
+}
+
 async function elevenlabsTts(text: string, voice: TtsVoice): Promise<Buffer> {
   const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice.providerVoiceId}`, {
     method: 'POST',
@@ -65,7 +94,7 @@ async function elevenlabsTts(text: string, voice: TtsVoice): Promise<Buffer> {
 }
 
 async function elevenlabsTtsStream(text: string, voice: TtsVoice, onChunk: (chunk: Buffer) => void): Promise<void> {
-  const url = `https://api.elevenlabs.io/v1/text-to-speech/${voice.providerVoiceId}/stream?output_format=pcm_16000`;
+  const url = `https://api.elevenlabs.io/v1/text-to-speech/${voice.providerVoiceId}/stream?output_format=pcm_24000`;
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -172,10 +201,16 @@ export async function tts(
   try {
     const name = provider.name.toLowerCase();
     const isElevenLabs = name.includes('elevenlabs') || name.includes('eleven');
+    const isKokoro = name.includes('kokoro');
 
     // Stream chunks directly for providers that support it
     if (!saveFile && isElevenLabs) {
       await elevenlabsTtsStream(text, voice, options!.onChunk!);
+      return { characters, fileName: null, usdCost };
+    }
+
+    if (!saveFile && isKokoro) {
+      await kokoroTtsStream(text, voice, options!.onChunk!);
       return { characters, fileName: null, usdCost };
     }
 
