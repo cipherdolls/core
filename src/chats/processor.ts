@@ -3,6 +3,7 @@ import { Prisma, type Chat } from '@prisma/client';
 import { BaseProcessor } from '../queue/processor';
 import { prisma, model } from '../db';
 import { buildAndCacheSystemPrompt } from './systemPrompt';
+import { invalidateChatHistory } from '../llm/chatHistory';
 
 const scalarFields = Object.values(Prisma.ChatScalarFieldEnum) as Prisma.ChatScalarFieldEnum[];
 
@@ -46,8 +47,23 @@ class ChatsProcessor extends BaseProcessor<Chat> {
       action: async () => {
         switch (chat.action) {
           case 'Init':
-            console.log(`[chat] ${chat.id} action: Init`);
+            console.log(`[chat] ${chat.id} action: Init — deleting messages, rebuilding prompt`);
+            await prisma.message.deleteMany({ where: { chatId: chat.id } });
+            await invalidateChatHistory(chat.id);
             await buildAndCacheSystemPrompt(chat.id);
+
+            // Create greeting message if scenario has one (triggers TTS via message processor)
+            const scenario = await prisma.scenario.findUnique({ where: { id: chat.scenarioId } });
+            if (scenario?.greeting) {
+              await model.message.create({
+                data: {
+                  role: 'ASSISTANT',
+                  content: scenario.greeting,
+                  chat: { connect: { id: chat.id } },
+                  user: { connect: { id: chat.userId } },
+                },
+              });
+            }
             break;
           case 'RefreshSystemPrompt':
             console.log(`[chat] ${chat.id} action: RefreshSystemPrompt`);

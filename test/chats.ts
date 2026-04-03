@@ -1025,6 +1025,77 @@ export function describeChats() {
       expect(prompt).toContain('Alice');
     });
 
+    // ─── Init (reset) chat ────────────────────────────────────────
+
+    it('hanaChat has at least 1 message before Init', async () => {
+      const { status, body } = await api('GET', `/messages?chatId=${hanaChatId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+      expect(body.data.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('alice sends a user message to hanaChat', async () => {
+      const { status, body } = await api('POST', '/messages', auth.alice.jwt, {
+        chatId: hanaChatId,
+        content: 'Hey, how are you doing?',
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('id');
+    });
+
+    it('aliceChatProcessEvents after user message', async () => {
+      await waitForQueuesEmpty(60000);
+      aliceChatProcessEvents = [];
+    });
+
+    it('hanaChat has at least 2 messages before Init', async () => {
+      const { status, body } = await api('GET', `/messages?chatId=${hanaChatId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+      expect(body.data.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('alice triggers Init action on hanaChat', async () => {
+      const { status, body } = await api('PATCH', `/chats/${hanaChatId}`, auth.alice.jwt, {
+        action: 'Init',
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('id', hanaChatId);
+    });
+
+    it('aliceChatProcessEvents after Init action', async () => {
+      await waitForQueuesEmpty(60000);
+      const events = groupByResourceName(aliceChatProcessEvents);
+      expect(events.Chat).toBeDefined();
+      aliceChatProcessEvents = [];
+    });
+
+    it('hanaChat has exactly 1 greeting message after Init', async () => {
+      const { status, body } = await api('GET', `/messages?chatId=${hanaChatId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+      expect(body.data.length).toBe(1);
+      expect(body.data[0].role).toBe('ASSISTANT');
+    });
+
+    it('hanaChat action is reset to Nothing after Init', async () => {
+      const { status, body } = await api('GET', `/chats/${hanaChatId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+      expect(body.action).toBe('Nothing');
+    });
+
+    it('hanaChat system-prompt is refreshed after Init', async () => {
+      const res = await fetch(`${BASE_URL}/chats/${hanaChatId}/system-prompt`, {
+        headers: { Authorization: `Bearer ${auth.alice.jwt}` },
+      });
+      expect(res.status).toBe(200);
+      const prompt = await res.text();
+      expect(prompt).toContain('### Introduction');
+    });
+
+    it('drain remaining events after Init test', async () => {
+      await waitForQueuesEmpty(60000);
+      aliceUserProcessEvents = [];
+      aliceChatProcessEvents = [];
+    });
+
     // ─── Final counts ───────────────────────────────────────────
 
     it('alice still has 3 chats after edge-case tests', async () => {
