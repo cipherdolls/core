@@ -28,9 +28,6 @@ Analyze the following JSON to understand the user's Doll and its status:
 Analyze the following JSON to understand all available DollBodies the user can buy:
 {dollBodiesJSON}
 
-### Tool Instructions
-{toolInstruction}
-
 ### User
 Species: Human
 Name: {user}
@@ -144,8 +141,6 @@ export async function buildAndCacheSystemPrompt(chatId: string): Promise<string>
       }),
     ]);
 
-    const toolInstruction = chatDoll?.dollBody?.toolInstruction ?? 'No tool instructions available for this DollBody.';
-
     promptText = format(normalTemplate, {
       char: chat.avatar.name,
       avatarCharacter: chat.avatar.character ?? '',
@@ -156,10 +151,14 @@ export async function buildAndCacheSystemPrompt(chatId: string): Promise<string>
       scenarioSystemMessage: chat.scenario.systemMessage ?? '',
       dollStatus: JSON.stringify(dolls, null, 2),
       dollBodiesJSON: JSON.stringify(dollBodies, null, 2),
-      toolInstruction,
       currentDateTime: new Date().toLocaleString(),
       lastUserMessageDateTime: lastUserMsgs?.length ? lastUserMsgs[0].createdAt.toLocaleString() : 'never',
     });
+
+    // Only include tool instructions when a doll is connected and has toolInstruction
+    if (chatDoll?.dollBody?.toolInstruction) {
+      promptText += `\n\n### Tool Instructions\n${chatDoll.dollBody.toolInstruction}`;
+    }
   }
 
   const cacheKey = `chatSystemPrompt:${chatId}`;
