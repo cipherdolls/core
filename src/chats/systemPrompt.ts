@@ -28,6 +28,9 @@ Analyze the following JSON to understand the user's Doll and its status:
 Analyze the following JSON to understand all available DollBodies the user can buy:
 {dollBodiesJSON}
 
+### Tool Instructions
+{toolInstruction}
+
 ### User
 Species: Human
 Name: {user}
@@ -127,7 +130,7 @@ export async function buildAndCacheSystemPrompt(chatId: string): Promise<string>
       scenarioSystemMessage: chat.scenario.systemMessage ?? '',
     });
   } else {
-    const [dolls, dollBodies, lastUserMsgs] = await Promise.all([
+    const [dolls, dollBodies, lastUserMsgs, chatDoll] = await Promise.all([
       prisma.doll.findMany({ where: { userId: chat.userId } }),
       prisma.dollBody.findMany(),
       prisma.message.findMany({
@@ -135,7 +138,13 @@ export async function buildAndCacheSystemPrompt(chatId: string): Promise<string>
         orderBy: { createdAt: 'desc' },
         take: 1,
       }),
+      prisma.doll.findFirst({
+        where: { chatId: chat.id },
+        include: { dollBody: true },
+      }),
     ]);
+
+    const toolInstruction = chatDoll?.dollBody?.toolInstruction ?? 'No tool instructions available for this DollBody.';
 
     promptText = format(normalTemplate, {
       char: chat.avatar.name,
@@ -147,6 +156,7 @@ export async function buildAndCacheSystemPrompt(chatId: string): Promise<string>
       scenarioSystemMessage: chat.scenario.systemMessage ?? '',
       dollStatus: JSON.stringify(dolls, null, 2),
       dollBodiesJSON: JSON.stringify(dollBodies, null, 2),
+      toolInstruction,
       currentDateTime: new Date().toLocaleString(),
       lastUserMessageDateTime: lastUserMsgs?.length ? lastUserMsgs[0].createdAt.toLocaleString() : 'never',
     });

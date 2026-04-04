@@ -117,18 +117,20 @@ model Doll {
 }
 
 model DollBody {
-  id          String     @id @default(uuid())
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  name        String
-  description String
-  picture     Picture?
-  productUrl  String?
-  published   Boolean    @default(false)
-  avatar      Avatar     @relation(fields: [avatarId], references: [id])
-  avatarId    String
-  dolls       Doll[]
-  firmwares   Firmware[]
+  id              String     @id @default(uuid())
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  name            String
+  description     String
+  picture         Picture?
+  productUrl      String?
+  toolInstruction String?
+  tools           Json?
+  published       Boolean    @default(false)
+  avatar          Avatar     @relation(fields: [avatarId], references: [id])
+  avatarId        String
+  dolls           Doll[]
+  firmwares       Firmware[]
 }
 
 model Firmware {

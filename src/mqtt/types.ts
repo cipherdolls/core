@@ -18,4 +18,15 @@ export type SystemEvent = {
   action: 'reset' | 'restart' | 'deepsleep';
 };
 
-export type ActionEvent = AudioEvent | SystemEvent;
+export type ToolCallEvent = {
+  type: 'toolCall';
+  chatId: string;
+  messageId: string;
+  toolCalls: {
+    id: string;
+    name: string;
+    arguments: string;
+  }[];
+};
+
+export type ActionEvent = AudioEvent | SystemEvent | ToolCallEvent;

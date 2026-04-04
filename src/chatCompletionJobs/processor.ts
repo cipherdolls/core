@@ -4,8 +4,10 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { ethers } from 'ethers';
 import { BaseProcessor } from '../queue/processor';
 import { prisma, model } from '../db';
-import { chatCompletion } from '../llm/completion';
+import { chatCompletion, type ToolCall } from '../llm/completion';
 import { rebuildChatHistory } from '../llm/chatHistory';
+import { publish } from '../mqtt/client';
+import type { ToolCallEvent } from '../mqtt/types';
 
 const MASTER_WALLET_ADDRESS = process.env.MASTER_WALLET_ADDRESS!;
 
@@ -39,8 +41,15 @@ class ChatCompletionJobsProcessor extends BaseProcessor<ChatCompletionJob> {
       });
       if (!chat) throw new Error('Chat not found');
 
+      // Fetch tools from the DollBody linked to this chat's doll
+      const doll = await prisma.doll.findFirst({
+        where: { chatId: chat.id },
+        include: { dollBody: true },
+      });
+      const tools = (doll?.dollBody?.tools as any[] | null) ?? undefined;
+
       // Call LLM (chat history is fetched inside chatCompletion)
-      const result = await chatCompletion(chat as any);
+      const result = await chatCompletion(chat as any, { tools });
 
       // Calculate cost
       const chatModel = chat.scenario.chatModel;
@@ -75,10 +84,15 @@ class ChatCompletionJobsProcessor extends BaseProcessor<ChatCompletionJob> {
       // Create transactions if cost > 0
       await this.createTransactions(chat, assistantMessage.id, usdCost);
 
+      // If the LLM requested tool calls, publish them via MQTT to the doll
+      if (result.toolCalls.length > 0 && doll) {
+        this.publishToolCalls(doll.id, chat.id, assistantMessage.id, result.toolCalls);
+      }
+
       // Rebuild chat history cache from DB now that the assistant message is persisted
       await rebuildChatHistory(chat.id);
 
-      console.log(`[chatCompletionJob] Completed: ${result.totalTokens} tokens, $${usdCost.toFixed(6)}`);
+      console.log(`[chatCompletionJob] Completed: ${result.totalTokens} tokens, $${usdCost.toFixed(6)}${result.toolCalls.length ? `, ${result.toolCalls.length} tool call(s)` : ''}`);
     } catch (error: any) {
       console.error(`[chatCompletionJob] Failed:`, JSON.stringify(error, Object.getOwnPropertyNames(error)));
       await prisma.chatCompletionJob.update({
@@ -86,6 +100,22 @@ class ChatCompletionJobsProcessor extends BaseProcessor<ChatCompletionJob> {
         data: { error: error.message, timeTakenMs: Date.now() - startTime },
       });
     }
+  }
+
+  private publishToolCalls(dollId: string, chatId: string, messageId: string, toolCalls: ToolCall[]): void {
+    const event: ToolCallEvent = {
+      type: 'toolCall',
+      chatId,
+      messageId,
+      toolCalls: toolCalls.map((tc) => ({
+        id: tc.id,
+        name: tc.function.name,
+        arguments: tc.function.arguments,
+      })),
+    };
+
+    publish(`dolls/${dollId}/toolCalls`, event);
+    console.log(`[chatCompletionJob] Published ${toolCalls.length} tool call(s) to dolls/${dollId}/toolCalls`);
   }
 
   private async createTransactions(chat: any, messageId: string, usdCost: Decimal): Promise<void> {
