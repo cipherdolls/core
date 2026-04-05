@@ -1,6 +1,6 @@
 import { prisma } from '../db';
 import { redisConnection } from '../queue/connection';
-import { md } from '../helpers/markdown';
+import { md, fillVars } from '../helpers/markdown';
 import type { MdNode } from '../helpers/markdown';
 
 const SYSTEM_PROMPT_TTL = 60 * 60; // 1 hour in seconds
@@ -157,17 +157,23 @@ export async function buildAndCacheSystemPrompt(chatId: string): Promise<string>
     isRoleplay ? roleplayRules : normalGuidelines,
   ];
 
-  const vars = {
+  // Base vars — plain values, no {placeholders} in them
+  const baseVars = {
     char: chat.avatar.name,
     avatarGender: chat.avatar.gender ?? '',
-    avatarCharacter: chat.avatar.character ?? '',
     user: chat.user.name ?? 'User',
-    userCharacter: chat.user.character ?? '',
     userLanguage: chat.user.language ?? 'en',
-    scenarioName: chat.scenario.name,
-    scenarioSystemMessage: chat.scenario.systemMessage ?? '',
     currentDateTime: new Date().toLocaleString(),
     lastUserMessageDateTime: lastUserMsgs?.length ? lastUserMsgs[0].createdAt.toLocaleString() : 'never',
+  };
+
+  // DB strings may contain {user}, {char}, etc. — resolve them first
+  const vars = {
+    ...baseVars,
+    avatarCharacter: fillVars(chat.avatar.character ?? '', baseVars),
+    userCharacter: fillVars(chat.user.character ?? '', baseVars),
+    scenarioName: fillVars(chat.scenario.name, baseVars),
+    scenarioSystemMessage: fillVars(chat.scenario.systemMessage ?? '', baseVars),
   };
 
   const promptText = md(nodes, vars);

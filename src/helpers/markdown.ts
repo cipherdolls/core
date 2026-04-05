@@ -39,6 +39,14 @@ function render(nodes: MdNode[], vars: MdVars): string {
   return lines.join('\n\n');
 }
 
+/**
+ * Resolve {single brace} placeholders in raw DB strings
+ * before they enter the markdown builder.
+ */
+export function fillVars(text: string, vars: MdVars): string {
+  return text.replace(/\{(\w+)\}/g, (match, key) => vars[key] ?? match);
+}
+
 export function md(nodes: MdNode[], vars: MdVars = {}): string {
   return render(nodes, vars);
 }
