@@ -44,7 +44,19 @@ function render(nodes: MdNode[], vars: MdVars): string {
  * before they enter the markdown builder.
  */
 export function fillVars(text: string, vars: MdVars): string {
-  return text.replace(/\{(\w+)\}/g, (match, key) => vars[key] ?? match);
+  let result = '';
+  let i = 0;
+  while (i < text.length) {
+    const open = text.indexOf('{', i);
+    if (open === -1) { result += text.slice(i); break; }
+    const close = text.indexOf('}', open + 1);
+    if (close === -1) { result += text.slice(i); break; }
+    const key = text.slice(open + 1, close);
+    result += text.slice(i, open);
+    result += (key in vars) ? vars[key] : '{' + key + '}';
+    i = close + 1;
+  }
+  return result;
 }
 
 export function md(nodes: MdNode[], vars: MdVars = {}): string {
