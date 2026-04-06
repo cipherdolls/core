@@ -8,13 +8,13 @@ export type MdNode =
   | null
   | undefined;
 
-type MdVars = Record<string, string>;
+export type MdVars = Record<string, string>;
 
-function interpolate(text: string, vars: MdVars): string {
-  return text.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? '');
+export function fillVars(text: string, vars: MdVars): string {
+  return text.replace(/\{(\w+)\}/g, (match, key) => vars[key] ?? match);
 }
 
-function render(nodes: MdNode[], vars: MdVars): string {
+export function md(nodes: MdNode[]): string {
   const lines: string[] = [];
 
   for (const node of nodes) {
@@ -22,14 +22,14 @@ function render(nodes: MdNode[], vars: MdVars): string {
 
     if ('heading' in node) {
       const prefix = '#'.repeat(node.level ?? 3);
-      lines.push(`${prefix} ${interpolate(node.heading, vars)}`);
-      if (node.body) lines.push(render(node.body, vars));
+      lines.push(`${prefix} ${node.heading}`);
+      if (node.body) lines.push(md(node.body));
     } else if ('text' in node) {
-      lines.push(interpolate(node.text, vars));
+      lines.push(node.text);
     } else if ('list' in node) {
-      lines.push(node.list.map((item) => `- ${interpolate(item, vars)}`).join('\n'));
+      lines.push(node.list.map((item) => `- ${item}`).join('\n'));
     } else if ('json' in node) {
-      if (node.label) lines.push(interpolate(node.label, vars));
+      if (node.label) lines.push(node.label);
       lines.push(JSON.stringify(node.json, null, 2));
     } else if ('rule' in node) {
       lines.push('---');
@@ -37,12 +37,4 @@ function render(nodes: MdNode[], vars: MdVars): string {
   }
 
   return lines.join('\n\n');
-}
-
-export function fillVars(text: string, vars: MdVars): string {
-  return text.replace(/\{(\w+)\}/g, (match, key) => vars[key] ?? match);
-}
-
-export function md(nodes: MdNode[], vars: MdVars = {}): string {
-  return render(nodes, vars);
 }
