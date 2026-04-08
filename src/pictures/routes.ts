@@ -52,6 +52,30 @@ export const picturesRoutes = new Elysia({ prefix: '/pictures' })
     return servePicture(item.id, x, y, 'webp');
   })
 
+  /* ── GET /pictures/by/:entityType/:entityId/picture.jpg ─────── */
+  .get('/by/:entityType/:entityId/picture.jpg', async ({ params, query }) => {
+    const x = parseInt(query.x ?? '100');
+    const y = parseInt(query.y ?? '100');
+
+    const entityKeyMap: Record<string, string> = {
+      'avatars': 'avatarId',
+      'dolls': 'dollId',
+      'doll-bodies': 'dollBodyId',
+      'scenarios': 'scenarioId',
+      'ai-providers': 'aiProviderId',
+      'stt-providers': 'sttProviderId',
+      'tts-providers': 'ttsProviderId',
+    };
+
+    const entityKey = entityKeyMap[params.entityType];
+    if (!entityKey) return new Response(JSON.stringify({ error: 'Invalid entity type' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+
+    const item = await prisma.picture.findFirst({ where: { [entityKey]: params.entityId } });
+    if (!item) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+
+    return servePicture(item.id, x, y, 'jpeg');
+  })
+
   /* ── Protected routes (POST, DELETE) ────────────────────────── */
   .use(jwtGuard)
 
