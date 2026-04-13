@@ -44,6 +44,14 @@ class ChatsProcessor extends BaseProcessor<Chat> {
 
   protected override getFieldHandlers(job: Job, chat: Chat) {
     return {
+      knowledgeContext: async () => {
+        console.log(`[chat] ${chat.id} knowledgeContext updated — rebuilding system prompt`);
+        await buildAndCacheSystemPrompt(chat.id);
+      },
+      messageContext: async () => {
+        console.log(`[chat] ${chat.id} messageContext updated — rebuilding system prompt`);
+        await buildAndCacheSystemPrompt(chat.id);
+      },
       action: async () => {
         switch (chat.action) {
           case 'Init':

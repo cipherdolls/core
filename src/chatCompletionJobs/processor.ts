@@ -6,8 +6,7 @@ import { BaseProcessor } from '../queue/processor';
 import { prisma, model } from '../db';
 import { chatCompletion } from '../llm/completion';
 import { rebuildChatHistory } from '../llm/chatHistory';
-import { retrieveRagContext, formatRagContext } from '../llm/rag';
-import { buildAndCacheSystemPrompt } from '../chats/systemPrompt';
+import { searchMessages, searchKnowledgeBase } from '../llm/rag';
 
 const MASTER_WALLET_ADDRESS = process.env.MASTER_WALLET_ADDRESS!;
 
@@ -80,30 +79,31 @@ class ChatCompletionJobsProcessor extends BaseProcessor<ChatCompletionJob> {
       // Rebuild chat history cache from DB now that the assistant message is persisted
       await rebuildChatHistory(chat.id);
 
-      // RAG: retrieve context for the latest user message and bake it into the cached system prompt
-      // This runs *after* the LLM call so it doesn't add latency to the current response.
-      // The updated prompt will be ready for the next chat completion.
+      // RAG: run both searches and update Chat context fields.
+      // This runs *after* the LLM call — no latency on the current response.
+      // Updating the Chat triggers the chat processor which rebuilds the system prompt.
       try {
         const lastUserMsg = await prisma.message.findFirst({
           where: { chatId: chat.id, role: 'USER' },
           orderBy: { createdAt: 'desc' },
         });
         if (lastUserMsg?.content) {
-          const ragChunks = await retrieveRagContext(chat.scenarioId, lastUserMsg.content);
-          const ragContext = formatRagContext(ragChunks);
-          if (ragContext) {
-            const basePrompt = await buildAndCacheSystemPrompt(chat.id);
-            const { redisConnection } = await import('../queue/connection');
-            await redisConnection.set(
-              `chatSystemPrompt:${chat.id}`,
-              basePrompt + ragContext,
-              'EX', 60 * 60,
-            );
-            console.log(`[chatCompletionJob] RAG: injected ${ragChunks.length} chunks into system prompt`);
+          const [messageCtx, knowledgeCtx] = await Promise.all([
+            searchMessages(chat.id, chat.scenarioId, lastUserMsg.content),
+            searchKnowledgeBase(chat.scenarioId, lastUserMsg.content),
+          ]);
+
+          const data: any = {};
+          if (messageCtx !== (chat as any).messageContext) data.messageContext = messageCtx || null;
+          if (knowledgeCtx !== (chat as any).knowledgeContext) data.knowledgeContext = knowledgeCtx || null;
+
+          if (Object.keys(data).length > 0) {
+            await model.chat.update({ where: { id: chat.id }, data }, chat);
+            console.log(`[chatCompletionJob] RAG contexts updated for chat ${chat.id}`);
           }
         }
       } catch (err: any) {
-        console.error(`[chatCompletionJob] RAG retrieval failed (non-blocking): ${err.message}`);
+        console.error(`[chatCompletionJob] RAG update failed (non-blocking): ${err.message}`);
       }
 
       console.log(`[chatCompletionJob] Completed: ${result.totalTokens} tokens, $${usdCost.toFixed(6)}`);

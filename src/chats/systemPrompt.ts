@@ -152,6 +152,10 @@ export async function buildAndCacheSystemPrompt(chatId: string): Promise<string>
     });
   }
 
+  // Append RAG contexts if available
+  if (chat.messageContext) promptText += `\n\n${chat.messageContext}`;
+  if (chat.knowledgeContext) promptText += `\n\n${chat.knowledgeContext}`;
+
   const cacheKey = `chatSystemPrompt:${chatId}`;
   await redisConnection.set(cacheKey, promptText, 'EX', SYSTEM_PROMPT_TTL);
   console.log(`[systemPrompt] Cached for chat ${chatId} (type: ${chat.scenario.type})`);

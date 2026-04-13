@@ -2,6 +2,7 @@ import type { Job } from 'bullmq';
 import { Prisma, type EmbeddingJob } from '@prisma/client';
 import { BaseProcessor } from '../queue/processor';
 import { prisma, model } from '../db';
+import { generateEmbedding } from '../llm/embedding';
 
 const scalarFields = Object.values(Prisma.EmbeddingJobScalarFieldEnum) as Prisma.EmbeddingJobScalarFieldEnum[];
 
@@ -31,23 +32,29 @@ class EmbeddingJobsProcessor extends BaseProcessor<EmbeddingJob> {
 
       const embeddingModel = message.chat.scenario.embeddingModel;
 
-      // TODO: actual embedding generation via OpenAI-compatible API
-      // For now, record minimal metrics so the CUD pipeline fires correctly
-      const inputTokens = Math.ceil(message.content.length / 4);
-      const usdCost = inputTokens * Number(embeddingModel.dollarPerInputToken);
+      const result = await generateEmbedding(message.content, embeddingModel);
+      const vectorStr = `[${result.vector.join(',')}]`;
+
+      // Store the vector on the message using raw SQL (Prisma can't write Unsupported types)
+      await prisma.$executeRawUnsafe(
+        `UPDATE "Message" SET "vector" = $1::vector WHERE "id" = $2`,
+        vectorStr, message.id,
+      );
+
+      const usdCost = result.inputTokens * Number(embeddingModel.dollarPerInputToken);
 
       await model.embeddingJob.update({
         where: { id: embeddingJob.id },
         data: {
-          inputTokens,
-          totalTokens: inputTokens,
+          inputTokens: result.inputTokens,
+          totalTokens: result.totalTokens,
           usdCost,
           timeTakenMs: Date.now() - startTime,
           embeddingModel: { connect: { id: embeddingModel.id } },
         },
       }, embeddingJob);
 
-      console.log(`[embeddingJob] Completed: ${inputTokens} tokens, $${usdCost.toFixed(6)}`);
+      console.log(`[embeddingJob] Completed: ${result.inputTokens} tokens, $${usdCost.toFixed(6)}`);
     } catch (error: any) {
       console.error(`[embeddingJob] Failed: ${error.message}`);
       await prisma.embeddingJob.update({

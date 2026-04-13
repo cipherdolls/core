@@ -1,39 +1,63 @@
 import { prisma } from '../db';
 import { generateEmbedding } from './embedding';
 
-export interface RagChunk {
-  content: string;
-  fileName: string;
-  similarity: number;
+/**
+ * Search past messages in a chat for ones similar to the query.
+ * Returns a formatted context string, or empty string if no results.
+ */
+export async function searchMessages(
+  chatId: string,
+  scenarioId: string,
+  query: string,
+  limit = 5,
+): Promise<string> {
+  const scenario = await prisma.scenario.findUnique({
+    where: { id: scenarioId },
+    include: { embeddingModel: true },
+  });
+  if (!scenario?.embeddingModel) return '';
+
+  const result = await generateEmbedding(query, scenario.embeddingModel);
+  const vectorStr = `[${result.vector.join(',')}]`;
+
+  const rows = await prisma.$queryRawUnsafe<{ role: string; content: string; similarity: number }[]>(
+    `SELECT "role", "content",
+            1 - ("vector" <=> $1::vector) AS similarity
+     FROM "Message"
+     WHERE "chatId" = $2 AND "vector" IS NOT NULL
+     ORDER BY "vector" <=> $1::vector
+     LIMIT $3`,
+    vectorStr, chatId, limit,
+  );
+
+  if (rows.length === 0) return '';
+
+  const parts = rows.map(r =>
+    `[${r.role}] ${r.content}`
+  );
+
+  return `### Relevant Past Messages\n${parts.join('\n\n')}`;
 }
 
 /**
- * Retrieve the most relevant knowledge base chunks for a given query.
- * Returns empty array if the scenario has no knowledge base or no embedding model.
+ * Search knowledge base chunks for content similar to the query.
+ * Returns a formatted context string, or empty string if no results / no KB.
  */
-export async function retrieveRagContext(
+export async function searchKnowledgeBase(
   scenarioId: string,
   query: string,
-  limit = 3,
-): Promise<RagChunk[]> {
+  limit = 5,
+): Promise<string> {
   const scenario = await prisma.scenario.findUnique({
     where: { id: scenarioId },
     include: { embeddingModel: true, knowledgeBase: true },
   });
+  if (!scenario?.embeddingModel || !scenario.knowledgeBase) return '';
 
-  if (!scenario?.embeddingModel || !scenario.knowledgeBase) return [];
+  const result = await generateEmbedding(query, scenario.embeddingModel);
+  const vectorStr = `[${result.vector.join(',')}]`;
 
-  let embeddingResult;
-  try {
-    embeddingResult = await generateEmbedding(query, scenario.embeddingModel);
-  } catch (err: any) {
-    console.error(`[rag] Embedding generation failed: ${err.message}`);
-    return [];
-  }
-
-  const vectorStr = `[${embeddingResult.vector.join(',')}]`;
-
-  const results = await prisma.$queryRawUnsafe<RagChunk[]>(
+  const rows = await prisma.$queryRawUnsafe<{ content: string; fileName: string; similarity: number }[]>(
     `SELECT "content", "fileName",
             1 - ("vector" <=> $1::vector) AS similarity
      FROM "KnowledgeBaseChunk"
@@ -43,18 +67,11 @@ export async function retrieveRagContext(
     vectorStr, scenario.knowledgeBase.id, limit,
   );
 
-  return results;
-}
+  if (rows.length === 0) return '';
 
-/**
- * Format RAG chunks into a context string for injection into the system prompt.
- */
-export function formatRagContext(chunks: RagChunk[]): string {
-  if (chunks.length === 0) return '';
-
-  const contextParts = chunks.map((chunk, i) =>
-    `[Source: ${chunk.fileName}]\n${chunk.content}`
+  const parts = rows.map(r =>
+    `[Source: ${r.fileName}]\n${r.content}`
   );
 
-  return `\n### Knowledge Base Context\nThe following information was retrieved from the scenario's knowledge base. Use it to inform your responses when relevant:\n\n${contextParts.join('\n\n')}`;
+  return `### Knowledge Base\n${parts.join('\n\n')}`;
 }

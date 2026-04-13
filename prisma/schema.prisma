@@ -244,6 +244,8 @@ model Chat {
   updatedAt DateTime @updatedAt
   tts                Boolean      @default(true)
   action             ChatAction?
+  knowledgeContext    String?
+  messageContext      String?
   user               User                @relation(fields: [userId], references: [id])
   userId             String
   scenario           Scenario            @relation(fields: [scenarioId], references: [id])
