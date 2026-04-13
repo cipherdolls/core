@@ -4,6 +4,9 @@ CREATE TABLE "KnowledgeBase" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "name" TEXT NOT NULL,
+    "fileName" TEXT NOT NULL,
+    "fileType" TEXT NOT NULL,
+    "fileSize" INTEGER NOT NULL,
     "scenarioId" TEXT NOT NULL,
 
     CONSTRAINT "KnowledgeBase_pkey" PRIMARY KEY ("id")
@@ -15,7 +18,6 @@ CREATE TABLE "KnowledgeBaseChunk" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "content" TEXT NOT NULL,
-    "fileName" TEXT NOT NULL,
     "chunkIndex" INTEGER NOT NULL,
     "vector" vector,
     "knowledgeBaseId" TEXT NOT NULL,
@@ -24,7 +26,7 @@ CREATE TABLE "KnowledgeBaseChunk" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "KnowledgeBase_scenarioId_key" ON "KnowledgeBase"("scenarioId");
+CREATE INDEX "KnowledgeBase_scenarioId_idx" ON "KnowledgeBase"("scenarioId");
 
 -- CreateIndex
 CREATE INDEX "KnowledgeBaseChunk_knowledgeBaseId_idx" ON "KnowledgeBaseChunk"("knowledgeBaseId");

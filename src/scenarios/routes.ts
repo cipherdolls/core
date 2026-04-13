@@ -11,7 +11,7 @@ const scenarioInclude = {
   reasoningModel: { include: { aiProvider: true } },
   picture: true,
   avatars: true,
-  knowledgeBase: { include: { _count: { select: { chunks: true } } } },
+  knowledgeBases: { include: { _count: { select: { chunks: true } } } },
 };
 
 export const scenariosRoutes = new Elysia({ prefix: '/scenarios' })

@@ -220,7 +220,7 @@ model Scenario {
   chats            Chat[]
   avatars          Avatar[]
   sponsorships     Sponsorship[]
-  knowledgeBase    KnowledgeBase?
+  knowledgeBases   KnowledgeBase[]
 }
 
 enum ScenarioAction {
@@ -584,9 +584,13 @@ model KnowledgeBase {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   name      String
+  fileName  String
+  fileType  String
+  fileSize  Int
   scenario   Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
-  scenarioId String   @unique
+  scenarioId String
   chunks     KnowledgeBaseChunk[]
+  @@index([scenarioId])
 }
 
 model KnowledgeBaseChunk {
@@ -594,7 +598,6 @@ model KnowledgeBaseChunk {
   createdAt DateTime               @default(now())
   updatedAt DateTime               @updatedAt
   content   String
-  fileName  String
   chunkIndex Int
   vector    Unsupported("vector")?
   knowledgeBase   KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)

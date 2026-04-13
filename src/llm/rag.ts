@@ -40,8 +40,8 @@ export async function searchMessages(
 }
 
 /**
- * Search knowledge base chunks for content similar to the query.
- * Returns a formatted context string, or empty string if no results / no KB.
+ * Search across ALL knowledge bases for a scenario.
+ * Returns a formatted context string, or empty string if no results / no KBs.
  */
 export async function searchKnowledgeBase(
   scenarioId: string,
@@ -50,27 +50,33 @@ export async function searchKnowledgeBase(
 ): Promise<string> {
   const scenario = await prisma.scenario.findUnique({
     where: { id: scenarioId },
-    include: { embeddingModel: true, knowledgeBase: true },
+    include: { embeddingModel: true, knowledgeBases: { select: { id: true, name: true } } },
   });
-  if (!scenario?.embeddingModel || !scenario.knowledgeBase) return '';
+  if (!scenario?.embeddingModel || scenario.knowledgeBases.length === 0) return '';
 
   const result = await generateEmbedding(query, scenario.embeddingModel);
   const vectorStr = `[${result.vector.join(',')}]`;
 
-  const rows = await prisma.$queryRawUnsafe<{ content: string; fileName: string; similarity: number }[]>(
-    `SELECT "content", "fileName",
+  const kbIds = scenario.knowledgeBases.map(kb => kb.id);
+  const kbNameMap = new Map(scenario.knowledgeBases.map(kb => [kb.id, kb.name]));
+
+  // Build placeholders for the IN clause: $2, $3, $4, ...
+  const placeholders = kbIds.map((_, i) => `$${i + 2}`).join(', ');
+
+  const rows = await prisma.$queryRawUnsafe<{ content: string; knowledgeBaseId: string; similarity: number }[]>(
+    `SELECT "content", "knowledgeBaseId",
             1 - ("vector" <=> $1::vector) AS similarity
      FROM "KnowledgeBaseChunk"
-     WHERE "knowledgeBaseId" = $2 AND "vector" IS NOT NULL
+     WHERE "knowledgeBaseId" IN (${placeholders}) AND "vector" IS NOT NULL
      ORDER BY "vector" <=> $1::vector
-     LIMIT $3`,
-    vectorStr, scenario.knowledgeBase.id, limit,
+     LIMIT $${kbIds.length + 2}`,
+    vectorStr, ...kbIds, limit,
   );
 
   if (rows.length === 0) return '';
 
   const parts = rows.map(r =>
-    `[Source: ${r.fileName}]\n${r.content}`
+    `[Source: ${kbNameMap.get(r.knowledgeBaseId) ?? 'unknown'}]\n${r.content}`
   );
 
   return `### Knowledge Base\n${parts.join('\n\n')}`;

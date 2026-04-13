@@ -25,7 +25,6 @@ import {
   picturesProcessor,
   firmwaresProcessor,
   knowledgeBasesProcessor,
-  knowledgeBaseChunksProcessor,
 } from './processors';
 
 /** Register all BullMQ workers. */
@@ -57,7 +56,6 @@ export function startWorkers() {
   registerWorker('picture', (job) => picturesProcessor.process(job));
   registerWorker('firmware', (job) => firmwaresProcessor.process(job));
   registerWorker('knowledgeBase', (job) => knowledgeBasesProcessor.process(job));
-  registerWorker('knowledgeBaseChunk', (job) => knowledgeBaseChunksProcessor.process(job));
 
   console.log('All BullMQ workers registered.');
 }

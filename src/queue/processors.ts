@@ -24,4 +24,3 @@ export { fillerWordsProcessor } from '../fillerWords/processor';
 export { picturesProcessor } from '../pictures/processor';
 export { firmwaresProcessor } from '../firmwares/processor';
 export { knowledgeBasesProcessor } from '../knowledgeBases/processor';
-export { knowledgeBaseChunksProcessor } from '../knowledgeBases/chunkProcessor';
