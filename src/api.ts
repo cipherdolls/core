@@ -27,6 +27,7 @@ import { chatCompletionJobsRoutes } from './chatCompletionJobs/routes';
 import { embeddingJobsRoutes } from './embeddingJobs/routes';
 import { fillerWordsRoutes } from './fillerWords/routes';
 import { firmwaresRoutes } from './firmwares/routes';
+import { knowledgeBasesRoutes } from './knowledgeBases/routes';
 import { picturesRoutes } from './pictures/routes';
 import { audiosRoutes } from './audios/routes';
 import { tokenRoutes } from './token/routes';
@@ -76,6 +77,7 @@ const app = new Elysia({ normalize: true })
   .use(embeddingJobsRoutes)
   .use(fillerWordsRoutes)
   .use(firmwaresRoutes)
+  .use(knowledgeBasesRoutes)
   .use(picturesRoutes)
   .use(audiosRoutes)
   .use(tokenRoutes)

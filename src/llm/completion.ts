@@ -3,6 +3,7 @@ import { prisma } from '../db';
 import { redisConnection } from '../queue/connection';
 import { getChatHistory } from './chatHistory';
 import { buildAndCacheSystemPrompt } from '../chats/systemPrompt';
+import { retrieveRagContext, formatRagContext } from './rag';
 
 /**
  * Call the LLM (Ollama-compatible OpenAI endpoint) for chat completion.
@@ -28,6 +29,18 @@ export async function chatCompletion(chat: Chat & { scenario: Scenario & { chatM
 
   // Get chat history from Redis (rebuild from DB if missing)
   const history = await getChatHistory(chat.id);
+
+  // RAG: retrieve relevant knowledge base context from the latest user message
+  const lastUserMessage = [...history].reverse().find(m => m.role === 'user');
+  if (lastUserMessage?.content) {
+    try {
+      const ragChunks = await retrieveRagContext(chat.scenarioId, lastUserMessage.content);
+      const ragContext = formatRagContext(ragChunks);
+      if (ragContext) systemPrompt += ragContext;
+    } catch (err: any) {
+      console.error(`[chatCompletion] RAG retrieval failed: ${err.message}`);
+    }
+  }
 
   // Build messages array: system prompt + chat history
   const messages = [
