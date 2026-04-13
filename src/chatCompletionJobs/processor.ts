@@ -6,6 +6,8 @@ import { BaseProcessor } from '../queue/processor';
 import { prisma, model } from '../db';
 import { chatCompletion } from '../llm/completion';
 import { rebuildChatHistory } from '../llm/chatHistory';
+import { retrieveRagContext, formatRagContext } from '../llm/rag';
+import { buildAndCacheSystemPrompt } from '../chats/systemPrompt';
 
 const MASTER_WALLET_ADDRESS = process.env.MASTER_WALLET_ADDRESS!;
 
@@ -77,6 +79,32 @@ class ChatCompletionJobsProcessor extends BaseProcessor<ChatCompletionJob> {
 
       // Rebuild chat history cache from DB now that the assistant message is persisted
       await rebuildChatHistory(chat.id);
+
+      // RAG: retrieve context for the latest user message and bake it into the cached system prompt
+      // This runs *after* the LLM call so it doesn't add latency to the current response.
+      // The updated prompt will be ready for the next chat completion.
+      try {
+        const lastUserMsg = await prisma.message.findFirst({
+          where: { chatId: chat.id, role: 'USER' },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (lastUserMsg?.content) {
+          const ragChunks = await retrieveRagContext(chat.scenarioId, lastUserMsg.content);
+          const ragContext = formatRagContext(ragChunks);
+          if (ragContext) {
+            const basePrompt = await buildAndCacheSystemPrompt(chat.id);
+            const { redisConnection } = await import('../queue/connection');
+            await redisConnection.set(
+              `chatSystemPrompt:${chat.id}`,
+              basePrompt + ragContext,
+              'EX', 60 * 60,
+            );
+            console.log(`[chatCompletionJob] RAG: injected ${ragChunks.length} chunks into system prompt`);
+          }
+        }
+      } catch (err: any) {
+        console.error(`[chatCompletionJob] RAG retrieval failed (non-blocking): ${err.message}`);
+      }
 
       console.log(`[chatCompletionJob] Completed: ${result.totalTokens} tokens, $${usdCost.toFixed(6)}`);
     } catch (error: any) {
