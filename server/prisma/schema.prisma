@@ -1,0 +1,303 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  role      UserRole @default(USER)
+
+  name          String       @default("Adam")
+  character     String       @default("")
+  gender        Gender?
+  language      LanguageCode @default(en)
+
+  lastSignInAt  DateTime?
+  signerAddress String    @unique
+
+  ttsProviders TtsProvider[]
+  sttProviders SttProvider[]
+  aiProviders  AiProvider[]
+  characters   Character[]
+  chats        Chat[]
+  messages     Message[]
+
+  invitedBy   User?   @relation("UserInvites", fields: [invitedById], references: [id], onDelete: SetNull)
+  invitedById String?
+  invites     User[]  @relation("UserInvites")
+
+  @@index([invitedById])
+}
+
+model Picture {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  character     Character?   @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  characterId   String?      @unique
+  sttProvider   SttProvider? @relation(fields: [sttProviderId], references: [id], onDelete: Cascade)
+  sttProviderId String?      @unique
+  aiProvider    AiProvider?  @relation(fields: [aiProviderId], references: [id], onDelete: Cascade)
+  aiProviderId  String?      @unique
+  ttsProvider   TtsProvider? @relation(fields: [ttsProviderId], references: [id], onDelete: Cascade)
+  ttsProviderId String?      @unique
+}
+
+/// Merged Avatar + Scenario. One Character carries personality, voice, and the
+/// scenario/system-prompt + LLM settings. A Chat links to exactly one Character.
+model Character {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // identity / personality (from Avatar)
+  name         String
+  shortDesc    String       @default("")
+  character    String       @default("")
+  introduction String?
+  greeting     String?
+  picture      Picture?
+  gender       Gender?
+  language     LanguageCode @default(en)
+  published    Boolean      @default(false)
+  recommended  Boolean      @default(false)
+
+  // scenario / LLM config (from Scenario)
+  type             ScenarioType @default(NORMAL)
+  systemMessage    String       @default("")
+  temperature      Float?
+  topP             Float?
+  frequencyPenalty Float?
+  presencePenalty  Float?
+
+  user        User      @relation(fields: [userId], references: [id])
+  userId      String
+  ttsVoice    TtsVoice  @relation(fields: [ttsVoiceId], references: [id])
+  ttsVoiceId  String
+  chatModel   ChatModel @relation(fields: [chatModelId], references: [id])
+  chatModelId String
+
+  chats Chat[]
+}
+
+model Chat {
+  id        String      @id @default(uuid())
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  tts       Boolean     @default(true)
+  action    ChatAction?
+
+  user          User         @relation(fields: [userId], references: [id])
+  userId        String
+  character     Character    @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  characterId   String
+  sttProvider   SttProvider? @relation(fields: [sttProviderId], references: [id])
+  sttProviderId String?
+
+  chatCompletions ChatCompletion[]
+  messages        Message[]
+}
+
+model Message {
+  id        String          @id @default(uuid())
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  role      MessageUserRole @default(USER)
+  content   String?
+  explicit  Boolean         @default(false)
+  fileName  String?
+  completed Boolean         @default(false)
+  mood      String?
+
+  chat   Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  chatId String
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+
+  sttJob         SttJob?
+  ttsJob         TtsJob?
+  chatCompletion ChatCompletion?
+}
+
+/// Renamed from ChatCompletionJob.
+model ChatCompletion {
+  id           String   @id @default(uuid())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  inputTokens  Int?
+  outputTokens Int?
+  totalTokens  Int?
+  timeTakenMs  Int?
+  error        String?
+  chatModel    ChatModel? @relation(fields: [chatModelId], references: [id], onDelete: Cascade)
+  chatModelId  String?
+  chat         Chat       @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  chatId       String
+  message      Message?   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId    String?    @unique
+}
+
+model SttJob {
+  id            String   @id @default(uuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  audioSeconds  Float?
+  timeTakenMs   Int?
+  error         String?
+  message       Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId     String       @unique
+  sttProvider   SttProvider? @relation(fields: [sttProviderId], references: [id], onDelete: Cascade)
+  sttProviderId String?
+}
+
+model TtsJob {
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  characters  Int?
+  timeTakenMs Int?
+  error       String?
+  message     Message   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId   String    @unique
+  ttsVoice    TtsVoice? @relation(fields: [ttsVoiceId], references: [id], onDelete: Cascade)
+  ttsVoiceId  String?
+}
+
+model SttProvider {
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  name        String
+  picture     Picture?
+  recommended Boolean  @default(false)
+  user        User     @relation(fields: [userId], references: [id])
+  userId      String
+  chats       Chat[]
+  sttJobs     SttJob[]
+}
+
+model AiProvider {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  name      String
+  apiKey    String
+  basePath  String
+  picture   Picture?
+  user       User        @relation(fields: [userId], references: [id])
+  userId     String
+  chatModels ChatModel[]
+}
+
+model ChatModel {
+  id                String   @id @default(uuid())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  providerModelName String
+  info              String?
+  contextWindow     Int      @default(0)
+  recommended       Boolean  @default(false)
+  error             String?
+  aiProvider      AiProvider       @relation(fields: [aiProviderId], references: [id], onDelete: Cascade)
+  aiProviderId    String
+  characters      Character[]
+  chatCompletions ChatCompletion[]
+}
+
+model TtsProvider {
+  id               String   @id @default(uuid())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  name             String
+  exampleVoiceText String   @default("Hello, this is a test.")
+  picture          Picture?
+  user      User       @relation(fields: [userId], references: [id])
+  userId    String
+  ttsVoices TtsVoice[]
+}
+
+model TtsVoice {
+  id              String       @id @default(uuid())
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  name            String
+  providerVoiceId String
+  recommended     Boolean      @default(false)
+  preview         String?
+  gender          Gender?
+  language        TtsLanguage?
+  ttsProvider     TtsProvider  @relation(fields: [ttsProviderId], references: [id], onDelete: Cascade)
+  ttsProviderId   String
+  characters      Character[]
+  ttsJobs         TtsJob[]
+}
+
+enum JobStatus {
+  queued
+  active
+  completed
+  failed
+}
+
+enum Gender {
+  Male
+  Female
+  Other
+}
+
+enum LanguageCode {
+  en
+  de
+  fr
+  es
+  it
+  pt
+  ru
+  ja
+  zh
+  ko
+}
+
+enum MessageUserRole {
+  SYSTEM
+  USER
+  ASSISTANT
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum ScenarioType {
+  NORMAL
+  ROLEPLAY
+}
+
+enum ChatAction {
+  Init
+  RefreshSystemPrompt
+  Summarize
+  Nothing
+}
+
+enum TtsLanguage {
+  en
+  de
+  fr
+  es
+  it
+  pt
+  ru
+  ja
+  zh
+  ko
+  multilingual
+}
