@@ -16,6 +16,7 @@ import { ttsProvidersRoutes } from './ttsProviders/routes';
 import { ttsVoicesRoutes } from './ttsVoices/routes';
 import { scenariosRoutes } from './scenarios/routes';
 import { avatarsRoutes } from './avatars/routes';
+import { familiesRoutes } from './families/routes';
 import { chatsRoutes } from './chats/routes';
 import { messagesRoutes } from './messages/routes';
 import { dollsRoutes } from './dolls/routes';
@@ -65,6 +66,7 @@ const app = new Elysia({ normalize: true })
   .use(ttsVoicesRoutes)
   .use(scenariosRoutes)
   .use(avatarsRoutes)
+  .use(familiesRoutes)
   .use(chatsRoutes)
   .use(messagesRoutes)
   .use(dollsRoutes)

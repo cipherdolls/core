@@ -13,6 +13,7 @@ export const model = {
   dollBody: createCudService('dollBody', prisma.dollBody),
   embeddingJob: createCudService('embeddingJob', prisma.embeddingJob),
   embeddingModel: createCudService('embeddingModel', prisma.embeddingModel),
+  family: createCudService('family', prisma.family),
   fillerWord: createCudService('fillerWord', prisma.fillerWord),
   firmware: createCudService('firmware', prisma.firmware),
   message: createCudService('message', prisma.message),

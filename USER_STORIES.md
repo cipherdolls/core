@@ -160,6 +160,26 @@ Derived from E2E test specs. Each story represents verified behavior tested agai
 
 ---
 
+## Families
+
+### Avatar Bundles for Dedicated Webapps
+- Users with spendable tokens can bundle avatars into a family with a unique slug
+- A dedicated webapp fetches its avatar bundle publicly via `GET /families/:slug`
+- Slugs are auto-generated from the family name when not provided
+- Slugs must be lowercase letters, numbers and hyphens (400 otherwise)
+- Duplicate slugs are rejected (409)
+- A family can contain published avatars or the owner's own avatars (400 otherwise)
+- A family can only be published if all bundled avatars are published
+- Anonymous users see only published families; nested avatars are filtered to published ones
+- Private families are only visible to their owner (or admin)
+- Only the owner (or admin) can update or delete a family
+- Families can have a picture, served via `/pictures/by/families/:id`
+- Deleting a family does not delete its avatars
+- Guest (0 tokens) cannot create families (403)
+- All MQTT events for family operations are tracked
+
+---
+
 ## Chats
 
 ### Conversation Sessions

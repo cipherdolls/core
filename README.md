@@ -67,6 +67,7 @@ core/
 │   ├── ttsVoices/              # TTS voice selection
 │   ├── scenarios/              # Chat templates with system prompts
 │   ├── avatars/                # AI personality configurations
+│   ├── families/               # Avatar bundles for dedicated webapps
 │   ├── chats/                  # Conversations
 │   ├── messages/               # Chat messages
 │   ├── chatCompletionJobs/     # LLM request processing
@@ -84,7 +85,7 @@ core/
 │   ├── llm/                    # LLM chat completion integration
 │   └── tts/                    # TTS helpers
 ├── prisma/
-│   └── schema.prisma           # Database schema (28 models)
+│   └── schema.prisma           # Database schema (27 models)
 ├── test/
 │   ├── docker-compose.yaml     # Test environment (postgres, redis, foundry)
 │   ├── Makefile                # Test orchestration

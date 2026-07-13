@@ -22,6 +22,7 @@ import {
   tokenPermitsProcessor,
   sttJobsProcessor,
   fillerWordsProcessor,
+  familiesProcessor,
   picturesProcessor,
   firmwaresProcessor,
 } from './processors';
@@ -52,6 +53,7 @@ export function startWorkers() {
   registerWorker('tokenPermit', (job) => tokenPermitsProcessor.process(job));
   registerWorker('sttJob', (job) => sttJobsProcessor.process(job));
   registerWorker('fillerWord', (job) => fillerWordsProcessor.process(job));
+  registerWorker('family', (job) => familiesProcessor.process(job));
   registerWorker('picture', (job) => picturesProcessor.process(job));
   registerWorker('firmware', (job) => firmwaresProcessor.process(job));
 
