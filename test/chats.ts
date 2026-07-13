@@ -151,6 +151,7 @@ export function describeChats() {
     it('alice creates a paid avatar (non-free TTS voice)', async () => {
       const { status, body } = await api('POST', '/avatars', auth.alice.jwt, {
         name: 'PaidAvatar', shortDesc: 'Costs money', character: 'expensive', ttsVoiceId: paidTtsVoiceId, published: true,
+        scenarioIds: [smallTalkScenarioId],
       });
       expect(status).toBe(200);
       expect(body).toHaveProperty('free', false);
@@ -765,6 +766,34 @@ export function describeChats() {
       expect(chatEvents.some((e: ProcessEvent) => e.jobStatus === 'active')).toBe(true);
       expect(chatEvents.some((e: ProcessEvent) => e.jobStatus === 'completed')).toBe(true);
       aliceChatProcessEvents = [];
+    });
+
+    // ─── Avatar-scenario restriction ────────────────────────────
+    // SmallTalk has linked avatars (hana, freya) — joi is not one of them.
+
+    it('alice can not create a joi Chat with smallTalkScenario (avatar not linked)', async () => {
+      const { status, body } = await api('POST', '/chats', auth.alice.jwt, {
+        avatarId: joiAvatarId,
+        scenarioId: smallTalkScenarioId,
+      });
+      expect(status).toBe(400);
+      expect(body.error).toContain('not allowed');
+    });
+
+    it('alice can not update the joi Chat to smallTalkScenario (avatar not linked)', async () => {
+      const { status, body } = await api('PATCH', `/chats/${joiChatId}`, auth.alice.jwt, {
+        scenarioId: smallTalkScenarioId,
+      });
+      expect(status).toBe(400);
+      expect(body.error).toContain('not allowed');
+    });
+
+    it('alice adds joi to her smallTalkScenario', async () => {
+      const { status, body } = await api('PATCH', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt, {
+        avatarIds: [hanaId, freyaId, joiAvatarId],
+      });
+      expect(status).toBe(200);
+      expect(body.avatars).toHaveLength(3);
     });
 
     // ─── Create + delete custom joi chat ────────────────────────

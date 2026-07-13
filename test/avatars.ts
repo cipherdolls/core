@@ -1106,9 +1106,11 @@ export function describeAvatars() {
 
     it('alice creates a temporary avatar for cascade delete test', async () => {
       const { body: ttsVoices } = await api('GET', '/tts-voices', auth.alice.jwt);
+      const { body: scenarios } = await api('GET', '/scenarios?published=true', auth.alice.jwt);
       const { status, body } = await api('POST', '/avatars', auth.alice.jwt, {
         name: 'TempCascade', shortDesc: 'test', character: 'test',
         ttsVoiceId: ttsVoices.data[0].id,
+        scenarioIds: [scenarios.data[0].id],
       });
       expect(status).toBe(200);
       expect(body).toHaveProperty('id');
@@ -1158,6 +1160,34 @@ export function describeAvatars() {
     it('chat on deleted avatar returns 404 (cascade delete)', async () => {
       const { status } = await api('GET', `/chats/${tempCascadeChatId}`, auth.alice.jwt);
       expect(status).toBe(404);
+    });
+
+    // ─── Link avatars to scenarios (final state) ────────────────
+    // Scenarios with linked avatars only allow those avatars in chats,
+    // so later modules need hana/freya/joi linked to the shared scenarios.
+
+    it('alice links hana and freya to her SmallTalk scenario', async () => {
+      const { body: scenarios } = await api('GET', '/scenarios?mine=true&published=true', auth.alice.jwt);
+      const smallTalk = scenarios.data.find((s: any) => !s.nsfw);
+      expect(smallTalk).toBeTruthy();
+
+      const { status, body } = await api('PATCH', `/scenarios/${smallTalk.id}`, auth.alice.jwt, {
+        avatarIds: [hanaAvatarId, freyaAvatarId],
+      });
+      expect(status).toBe(200);
+      expect(body.avatars).toHaveLength(2);
+    });
+
+    it('bob links hana, freya and joi to his DeepTalk scenario', async () => {
+      const { body: scenarios } = await api('GET', '/scenarios?published=true&nsfw=true', auth.bob.jwt);
+      const deepTalk = scenarios.data[0];
+      expect(deepTalk).toBeTruthy();
+
+      const { status, body } = await api('PATCH', `/scenarios/${deepTalk.id}`, auth.bob.jwt, {
+        avatarIds: [hanaAvatarId, freyaAvatarId, joiAvatarId],
+      });
+      expect(status).toBe(200);
+      expect(body.avatars).toHaveLength(3);
     });
 
     // ─── MQTT cleanup ──────────────────────────────────────────

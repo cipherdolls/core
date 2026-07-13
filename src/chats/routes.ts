@@ -73,8 +73,14 @@ export const chatsRoutes = new Elysia({ prefix: '/chats' })
     if (!avatar) { set.status = 404; return { error: 'Avatar not found' }; }
 
     // Validate scenario exists
-    const scenario = await prisma.scenario.findUnique({ where: { id: body.scenarioId } });
+    const scenario = await prisma.scenario.findUnique({ where: { id: body.scenarioId }, include: { avatars: { select: { id: true } } } });
     if (!scenario) { set.status = 404; return { error: 'Scenario not found' }; }
+
+    // Scenarios with linked avatars only allow those avatars
+    if (scenario.avatars.length > 0 && !scenario.avatars.some((a) => a.id === body.avatarId)) {
+      set.status = 400;
+      return { error: 'Avatar is not allowed for this scenario' };
+    }
 
     // Token balance enforcement — free scenarios/avatars skip the check
     const isFreeScenario = scenario.free;
@@ -141,6 +147,19 @@ export const chatsRoutes = new Elysia({ prefix: '/chats' })
     if (sttProviderId) {
       const sttProvider = await prisma.sttProvider.findUnique({ where: { id: sttProviderId } });
       if (!sttProvider) { set.status = 404; return { error: 'STT Provider not found' }; }
+    }
+
+    // Scenarios with linked avatars only allow those avatars
+    if (avatarId || scenarioId) {
+      const targetScenario = await prisma.scenario.findUnique({
+        where: { id: scenarioId ?? item.scenarioId },
+        include: { avatars: { select: { id: true } } },
+      });
+      const targetAvatarId = avatarId ?? item.avatarId;
+      if (targetScenario && targetScenario.avatars.length > 0 && !targetScenario.avatars.some((a) => a.id === targetAvatarId)) {
+        set.status = 400;
+        return { error: 'Avatar is not allowed for this scenario' };
+      }
     }
 
     const updated = await model.chat.update({
