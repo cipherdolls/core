@@ -781,6 +781,125 @@ export function describeScenarios() {
       expect(body.avatars[0]).toHaveProperty('id', avatarForScenarioId);
     });
 
+    // ─── Bulk reconnect scenarios to a different model ──────────
+
+    let reconnectChatModelId: string;
+
+    it('admin creates a second ChatModel as reconnect target', async () => {
+      const res1 = await api('GET', '/ai-providers?name=Ollama Chat', auth.admin.jwt);
+      expect(res1.status).toBe(200);
+      const ollamaChat = res1.body.data[0];
+
+      const { status, body } = await api('POST', '/chat-models', auth.admin.jwt, {
+        providerModelName: 'llama3.2:3b',
+        info: 'Meta Llama 3.2 3B - reconnect target model',
+        dollarPerInputToken: 0,
+        dollarPerOutputToken: 0,
+        contextWindow: 128000,
+        aiProviderId: ollamaChat.id,
+      });
+      expect(status).toBe(200);
+      reconnectChatModelId = body.id;
+    });
+
+    it('alice can not bulk reconnect scenarios (403)', async () => {
+      const { status } = await api('POST', '/scenarios/reconnect-model', auth.alice.jwt, {
+        modelType: 'chat',
+        fromModelId: chatModelId,
+        toModelId: reconnectChatModelId,
+      });
+      expect(status).toBe(403);
+    });
+
+    it('admin can not reconnect a model to itself (400)', async () => {
+      const { status } = await api('POST', '/scenarios/reconnect-model', auth.admin.jwt, {
+        modelType: 'chat',
+        fromModelId: chatModelId,
+        toModelId: chatModelId,
+      });
+      expect(status).toBe(400);
+    });
+
+    it('admin gets 404 when the reconnect target model does not exist', async () => {
+      const { status } = await api('POST', '/scenarios/reconnect-model', auth.admin.jwt, {
+        modelType: 'chat',
+        fromModelId: chatModelId,
+        toModelId: 'no-such-model-id',
+      });
+      expect(status).toBe(404);
+    });
+
+    it('admin bulk reconnects all scenarios to the new chat model', async () => {
+      const { status, body } = await api('POST', '/scenarios/reconnect-model', auth.admin.jwt, {
+        modelType: 'chat',
+        fromModelId: chatModelId,
+        toModelId: reconnectChatModelId,
+      });
+      expect(status).toBe(200);
+      expect(body.count).toBeGreaterThanOrEqual(2);
+      expect(body.scenarioIds).toContain(smallTalkScenarioId);
+      expect(body.scenarioIds).toContain(bobDeepTalkScenarioId);
+    });
+
+    it('alice and bob receive Scenario events after bulk reconnect', async () => {
+      await waitForQueuesEmpty(60000);
+      const aliceEvents = groupByResourceName(aliceUserProcessEvents);
+      expect((aliceEvents.Scenario || []).length).toBeGreaterThanOrEqual(2);
+      aliceUserProcessEvents = [];
+      const bobEvents = groupByResourceName(bobUserProcessEvents);
+      expect((bobEvents.Scenario || []).length).toBeGreaterThanOrEqual(2);
+      bobUserProcessEvents = [];
+    });
+
+    it('smallTalk uses the new chat model after bulk reconnect', async () => {
+      const { status, body } = await api('GET', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('chatModelId', reconnectChatModelId);
+    });
+
+    it('bobDeepTalk uses the new chat model after bulk reconnect', async () => {
+      const { status, body } = await api('GET', `/scenarios/${bobDeepTalkScenarioId}`, auth.bob.jwt);
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('chatModelId', reconnectChatModelId);
+    });
+
+    it('old chat model has no connected scenarios after bulk reconnect', async () => {
+      const { status, body } = await api('GET', `/chat-models/${chatModelId}`, auth.admin.jwt);
+      expect(status).toBe(200);
+      expect(body._count.scenarios).toBe(0);
+    });
+
+    it('admin bulk reconnects scenarios back to the original chat model', async () => {
+      const { status, body } = await api('POST', '/scenarios/reconnect-model', auth.admin.jwt, {
+        modelType: 'chat',
+        fromModelId: reconnectChatModelId,
+        toModelId: chatModelId,
+      });
+      expect(status).toBe(200);
+      expect(body.count).toBeGreaterThanOrEqual(2);
+    });
+
+    it('alice and bob receive Scenario events after reconnect back', async () => {
+      await waitForQueuesEmpty(60000);
+      const aliceEvents = groupByResourceName(aliceUserProcessEvents);
+      expect((aliceEvents.Scenario || []).length).toBeGreaterThanOrEqual(2);
+      aliceUserProcessEvents = [];
+      const bobEvents = groupByResourceName(bobUserProcessEvents);
+      expect((bobEvents.Scenario || []).length).toBeGreaterThanOrEqual(2);
+      bobUserProcessEvents = [];
+    });
+
+    it('smallTalk uses the original chat model again', async () => {
+      const { status, body } = await api('GET', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('chatModelId', chatModelId);
+    });
+
+    it('admin deletes the now-unused reconnect chat model', async () => {
+      const { status } = await api('DELETE', `/chat-models/${reconnectChatModelId}`, auth.admin.jwt);
+      expect(status).toBe(200);
+    });
+
     // ─── Guest still can't create ──────────────────────────────
 
     it('guest still can not create a scenario without spendable tokens (403)', async () => {
