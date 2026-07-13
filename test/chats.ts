@@ -963,11 +963,46 @@ export function describeChats() {
     });
 
     // ─── Alien ROLEPLAY chat ────────────────────────────────────
-    // The alien scenario has no linked avatars, but hana has linked
-    // scenarios — so hana is restricted to those until alien is added.
+    // The alien scenario has no linked avatars, so mixable avatars can use
+    // it freely. A non-mixable avatar is restricted to its linked scenarios.
 
     let alienChatId: string;
-    it('alice can not create an alien chat with hana (hana restricted to her linked scenarios)', async () => {
+    let freyaAlienChatId: string;
+    it('freya (mixable by default) can create a chat in the unlinked alien scenario', async () => {
+      const { status, body } = await api('POST', '/chats', auth.alice.jwt, {
+        avatarId: freyaId,
+        scenarioId: alienScenarioId,
+        tts: false,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('id');
+      freyaAlienChatId = body.id;
+    });
+
+    it('drain events after freya alien chat creation', async () => {
+      await waitForQueuesEmpty(60000);
+      aliceChatProcessEvents = [];
+    });
+
+    it('alice deletes the freya alien chat', async () => {
+      const { status } = await api('DELETE', `/chats/${freyaAlienChatId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+    });
+
+    it('drain events after freya alien chat delete', async () => {
+      await waitForQueuesEmpty(60000);
+      aliceChatProcessEvents = [];
+    });
+
+    it('alice sets hana avatar to not mixable', async () => {
+      const { status, body } = await api('PATCH', `/avatars/${hanaId}`, auth.alice.jwt, {
+        mixable: false,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('mixable', false);
+    });
+
+    it('alice can not create an alien chat with hana (not mixable, alien not linked)', async () => {
       const { status, body } = await api('POST', '/chats', auth.alice.jwt, {
         avatarId: hanaId,
         scenarioId: alienScenarioId,
@@ -1006,6 +1041,19 @@ export function describeChats() {
       expect(aliceChatProcessEvents.length).toBeGreaterThan(0);
       const events = groupByResourceName(aliceChatProcessEvents);
       expect(events.Chat).toBeDefined();
+      aliceChatProcessEvents = [];
+    });
+
+    it('alice restores hana avatar to mixable', async () => {
+      const { status, body } = await api('PATCH', `/avatars/${hanaId}`, auth.alice.jwt, {
+        mixable: true,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('mixable', true);
+    });
+
+    it('drain events after hana mixable restore', async () => {
+      await waitForQueuesEmpty(60000);
       aliceChatProcessEvents = [];
     });
 

@@ -134,6 +134,7 @@ export const avatarsRoutes = new Elysia({ prefix: '/avatars' })
       gender: t.Optional(t.String()),
       published: t.Optional(t.Boolean()),
       recommended: t.Optional(t.Boolean()),
+      mixable: t.Optional(t.Boolean()),
       scenarioIds: t.Optional(t.Array(t.String())),
     }),
   })
@@ -186,6 +187,7 @@ export const avatarsRoutes = new Elysia({ prefix: '/avatars' })
       gender: t.Optional(t.String()),
       published: t.Optional(t.Boolean()),
       recommended: t.Optional(t.Boolean()),
+      mixable: t.Optional(t.Boolean()),
       scenarioIds: t.Optional(t.Array(t.String())),
     }),
   })

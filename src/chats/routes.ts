@@ -69,18 +69,17 @@ export const chatsRoutes = new Elysia({ prefix: '/chats' })
   /* ── POST /chats ─────────────────────────────────────────────── */
   .post('/', async ({ user, body, set }) => {
     // Validate avatar exists
-    const avatar = await prisma.avatar.findUnique({ where: { id: body.avatarId }, include: { _count: { select: { scenarios: true } } } });
+    const avatar = await prisma.avatar.findUnique({ where: { id: body.avatarId } });
     if (!avatar) { set.status = 404; return { error: 'Avatar not found' }; }
 
     // Validate scenario exists
     const scenario = await prisma.scenario.findUnique({ where: { id: body.scenarioId }, include: { avatars: { select: { id: true } } } });
     if (!scenario) { set.status = 404; return { error: 'Scenario not found' }; }
 
-    // Avatar-scenario links restrict both sides: a scenario with linked
-    // avatars only allows those avatars, and an avatar with linked scenarios
-    // only allows those scenarios. Only fully unlinked pairs mix freely.
+    // A scenario with linked avatars only allows those avatars, and a
+    // non-mixable avatar only allows its linked scenarios.
     const isLinked = scenario.avatars.some((a) => a.id === body.avatarId);
-    if (!isLinked && (scenario.avatars.length > 0 || avatar._count.scenarios > 0)) {
+    if (!isLinked && (scenario.avatars.length > 0 || !avatar.mixable)) {
       set.status = 400;
       return { error: 'Avatar is not allowed for this scenario' };
     }
@@ -152,9 +151,8 @@ export const chatsRoutes = new Elysia({ prefix: '/chats' })
       if (!sttProvider) { set.status = 404; return { error: 'STT Provider not found' }; }
     }
 
-    // Avatar-scenario links restrict both sides: a scenario with linked
-    // avatars only allows those avatars, and an avatar with linked scenarios
-    // only allows those scenarios. Only fully unlinked pairs mix freely.
+    // A scenario with linked avatars only allows those avatars, and a
+    // non-mixable avatar only allows its linked scenarios.
     if (avatarId || scenarioId) {
       const targetAvatarId = avatarId ?? item.avatarId;
       const [targetScenario, targetAvatar] = await Promise.all([
@@ -162,13 +160,10 @@ export const chatsRoutes = new Elysia({ prefix: '/chats' })
           where: { id: scenarioId ?? item.scenarioId },
           include: { avatars: { select: { id: true } } },
         }),
-        prisma.avatar.findUnique({
-          where: { id: targetAvatarId },
-          include: { _count: { select: { scenarios: true } } },
-        }),
+        prisma.avatar.findUnique({ where: { id: targetAvatarId } }),
       ]);
       const isLinked = targetScenario?.avatars.some((a) => a.id === targetAvatarId) ?? false;
-      const isRestricted = (targetScenario?.avatars.length ?? 0) > 0 || (targetAvatar?._count.scenarios ?? 0) > 0;
+      const isRestricted = (targetScenario?.avatars.length ?? 0) > 0 || targetAvatar?.mixable === false;
       if (!isLinked && isRestricted) {
         set.status = 400;
         return { error: 'Avatar is not allowed for this scenario' };

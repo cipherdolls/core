@@ -140,6 +140,7 @@ export function describeAvatars() {
       expect(body).toHaveProperty('name', 'Hana');
       expect(body).toHaveProperty('published', false);
       expect(body).toHaveProperty('free', true);
+      expect(body).toHaveProperty('mixable', true);
       expect(body).toHaveProperty('userId', auth.alice.userId);
     });
 
