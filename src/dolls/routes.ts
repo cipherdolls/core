@@ -83,11 +83,19 @@ export const dollsRoutes = new Elysia({ prefix: '/dolls' })
           if (existingChat) {
             chatId = existingChat.id;
           } else {
-            // Create a new chat — scenarios with linked avatars only allow those avatars
+            // Create a new chat — avatar-scenario links restrict both sides,
+            // so pick a scenario linked to the avatar, or an unlinked one if
+            // the avatar has no linked scenarios
+            const dollAvatar = await prisma.avatar.findUnique({
+              where: { id: dollBody.avatarId },
+              include: { _count: { select: { scenarios: true } } },
+            });
             const scenario = await prisma.scenario.findFirst({
               where: {
                 published: true,
-                OR: [{ avatars: { none: {} } }, { avatars: { some: { id: dollBody.avatarId } } }],
+                ...(dollAvatar && dollAvatar._count.scenarios > 0
+                  ? { avatars: { some: { id: dollBody.avatarId } } }
+                  : { avatars: { none: {} } }),
               },
               orderBy: [{ recommended: 'desc' }, { createdAt: 'asc' }],
             });

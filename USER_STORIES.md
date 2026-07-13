@@ -152,7 +152,7 @@ Derived from E2E test specs. Each story represents verified behavior tested agai
 - Avatars auto-compute `free` flag based on their TTS provider's cost
 - Avatars can be published (only if all assigned scenarios are published)
 - Admin can set recommended flag
-- Avatars link to multiple scenarios (many-to-many); these links restrict which avatars a scenario's chats can use
+- Avatars link to multiple scenarios (many-to-many); these links restrict chats in both directions (linked avatars/scenarios only pair with each other)
 - Users see their own + chatted-with avatars; anonymous sees only published
 - Private avatars are only visible to their owner
 - Guest (0 tokens) cannot create avatars (403)
@@ -165,7 +165,8 @@ Derived from E2E test specs. Each story represents verified behavior tested agai
 ### Conversation Sessions
 - Users can create chats by selecting an avatar and scenario
 - **Scenario with linked avatars**: only those avatars can be used in a chat (400 for others)
-- **Scenario without linked avatars**: any avatar can be used
+- **Avatar with linked scenarios**: only those scenarios can be used in a chat (400 for others)
+- **Avatar and scenario both unlinked**: they can be mixed freely
 - **Free scenario + free avatar**: guest (0 tokens) CAN create a chat
 - **Paid scenario (dollarPerMessage > 0)**: guest CANNOT create a chat (403)
 - **Free scenario + paid avatar (non-free TTS)**: guest CANNOT create a chat (403)

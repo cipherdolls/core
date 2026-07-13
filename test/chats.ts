@@ -218,6 +218,7 @@ export function describeChats() {
         chatModelId: chatModel.id,
         dollarPerMessage: 0.05,
         published: true,
+        avatarIds: [hanaId],
       });
       expect(status).toBe(200);
       expect(body).toHaveProperty('free', false);
@@ -962,8 +963,27 @@ export function describeChats() {
     });
 
     // ─── Alien ROLEPLAY chat ────────────────────────────────────
+    // The alien scenario has no linked avatars, but hana has linked
+    // scenarios — so hana is restricted to those until alien is added.
 
     let alienChatId: string;
+    it('alice can not create an alien chat with hana (hana restricted to her linked scenarios)', async () => {
+      const { status, body } = await api('POST', '/chats', auth.alice.jwt, {
+        avatarId: hanaId,
+        scenarioId: alienScenarioId,
+      });
+      expect(status).toBe(400);
+      expect(body.error).toContain('not allowed');
+    });
+
+    it('alice links hana to the alien scenario', async () => {
+      const { status, body } = await api('PATCH', `/scenarios/${alienScenarioId}`, auth.alice.jwt, {
+        avatarIds: [hanaId],
+      });
+      expect(status).toBe(200);
+      expect(body.avatars).toHaveLength(1);
+    });
+
     it('alice creates an alien ROLEPLAY chat with hana', async () => {
       const { status, body } = await api('POST', '/chats', auth.alice.jwt, {
         avatarId: hanaId,
