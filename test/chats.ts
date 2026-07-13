@@ -770,9 +770,18 @@ export function describeChats() {
     });
 
     // ─── Avatar-scenario restriction ────────────────────────────
-    // SmallTalk has linked avatars (hana, freya) — joi is not one of them.
+    // A non-mixable scenario only allows its linked avatars.
+    // SmallTalk is linked to hana and freya — joi is not one of them.
 
-    it('alice can not create a joi Chat with smallTalkScenario (avatar not linked)', async () => {
+    it('alice sets her smallTalkScenario to not mixable', async () => {
+      const { status, body } = await api('PATCH', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt, {
+        mixable: false,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('mixable', false);
+    });
+
+    it('alice can not create a joi Chat with the not mixable smallTalkScenario (avatar not linked)', async () => {
       const { status, body } = await api('POST', '/chats', auth.alice.jwt, {
         avatarId: joiAvatarId,
         scenarioId: smallTalkScenarioId,
@@ -781,7 +790,7 @@ export function describeChats() {
       expect(body.error).toContain('not allowed');
     });
 
-    it('alice can not update the joi Chat to smallTalkScenario (avatar not linked)', async () => {
+    it('alice can not update the joi Chat to the not mixable smallTalkScenario (avatar not linked)', async () => {
       const { status, body } = await api('PATCH', `/chats/${joiChatId}`, auth.alice.jwt, {
         scenarioId: smallTalkScenarioId,
       });
@@ -847,6 +856,19 @@ export function describeChats() {
       const { status, body } = await api('GET', '/chats', auth.alice.jwt);
       expect(status).toBe(200);
       expect(body.data.length).toBe(2);
+    });
+
+    it('alice restores her smallTalkScenario to mixable', async () => {
+      const { status, body } = await api('PATCH', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt, {
+        mixable: true,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('mixable', true);
+    });
+
+    it('drain events after smallTalkScenario mixable restore', async () => {
+      await waitForQueuesEmpty(60000);
+      aliceChatProcessEvents = [];
     });
 
     // ─── 401 — Unauthenticated access ──────────────────────────

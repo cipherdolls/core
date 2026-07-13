@@ -1164,8 +1164,8 @@ export function describeAvatars() {
     });
 
     // ─── Link avatars to scenarios (final state) ────────────────
-    // Scenarios with linked avatars only allow those avatars in chats,
-    // so later modules need hana/freya/joi linked to the shared scenarios.
+    // Linked avatar-scenario pairs can always chat together, even when one
+    // side is set to mixable=false. Later modules rely on these links.
 
     it('alice links hana and freya to her SmallTalk scenario', async () => {
       const { body: scenarios } = await api('GET', '/scenarios?mine=true&published=true', auth.alice.jwt);

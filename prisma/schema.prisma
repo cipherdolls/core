@@ -208,6 +208,7 @@ model Scenario {
   recommended      Boolean    @default(false)
   nsfw             Boolean    @default(false)
   published        Boolean    @default(false)
+  mixable          Boolean    @default(true)
   chatModel        ChatModel      @relation(fields: [chatModelId], references: [id])
   chatModelId      String
   embeddingModel   EmbeddingModel? @relation(fields: [embeddingModelId], references: [id])

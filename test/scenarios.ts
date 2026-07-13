@@ -182,6 +182,7 @@ export function describeScenarios() {
       expect(body).toHaveProperty('recommended', true);
       expect(body).toHaveProperty('published', false);
       expect(body).toHaveProperty('free', true);
+      expect(body).toHaveProperty('mixable', true);
       expect(Number(body.dollarPerMessage)).toBe(0);
     });
 
