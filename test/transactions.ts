@@ -211,6 +211,12 @@ export function describeTransactions() {
       aliceHanaSmallTalkChatId = body.id;
     });
 
+    it('alice activates the hana SmallTalk chat (triggers greeting)', async () => {
+      const { status, body } = await api('PATCH', `/chats/${aliceHanaSmallTalkChatId}`, auth.alice.jwt, { active: true });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('active', true);
+    });
+
     it('aliceChatProcessEvents after chat creation', async () => {
       await waitForQueuesEmpty(60000);
 
@@ -220,7 +226,8 @@ export function describeTransactions() {
       const ttsJobs = processEvents.TtsJob || [];
       const embeddingJobs = processEvents.EmbeddingJob || [];
 
-      expect(chats.length).toBe(4);
+      // 4 from create + stt assign, 2 from activation
+      expect(chats.length).toBe(6);
       expect(messages.length).toBe(4);
       expect(ttsJobs.length).toBe(4);
       expect(embeddingJobs.length).toBe(4);
@@ -492,6 +499,12 @@ export function describeTransactions() {
       bobHanaDeepTalkChatId = body.id;
     });
 
+    it('bob activates the hana DeepTalk chat (triggers greeting)', async () => {
+      const { status, body } = await api('PATCH', `/chats/${bobHanaDeepTalkChatId}`, auth.bob.jwt, { active: true });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('active', true);
+    });
+
     it('bobChatProcessEvents after chat creation', async () => {
       await waitForQueuesEmpty(60000);
 
@@ -500,7 +513,8 @@ export function describeTransactions() {
       const messages = processEvents.Message || [];
       const ttsJobs = processEvents.TtsJob || [];
 
-      expect(chats.length).toBe(4);
+      // 4 from create + stt assign, 2 from activation
+      expect(chats.length).toBe(6);
       expect(messages.length).toBe(4);
       expect(ttsJobs.length).toBe(4);
 
@@ -687,10 +701,25 @@ export function describeTransactions() {
     });
 
     let guestHanaSmallTalkChatId: string;
+    let freeGuestAvatarId: string;
 
-    it('guest CAN create a hana SmallTalk chat (free scenario + free avatar)', async () => {
+    it('guest CAN create a SmallTalk chat (free scenario + free avatar)', async () => {
+      // hana is no longer free (her tts provider was made paid above and the
+      // free flag now follows provider cost) — build a genuinely free avatar.
+      const { body: freeProvider } = await api('POST', '/tts-providers', auth.admin.jwt, {
+        name: 'FreeGuestTts', dollarPerCharacter: 0,
+      });
+      const { body: freeVoice } = await api('POST', '/tts-voices', auth.admin.jwt, {
+        ttsProviderId: freeProvider.id, name: 'FreeGuestVoice', providerVoiceId: 'af_heart',
+      });
+      const { body: freeAvatar } = await api('POST', '/avatars', auth.admin.jwt, {
+        name: 'FreeGuestAvatar', shortDesc: 'free', character: 'free', ttsVoiceId: freeVoice.id, published: true,
+      });
+      expect(freeAvatar).toHaveProperty('free', true);
+      freeGuestAvatarId = freeAvatar.id;
+
       const { status, body } = await api('POST', '/chats', auth.guest.jwt, {
-        avatarId: hanaId,
+        avatarId: freeGuestAvatarId,
         scenarioId: smallTalkScenarioIdLocal,
       });
       expect(status).toBe(200);
@@ -737,6 +766,12 @@ export function describeTransactions() {
       guestHanaDeepTalkChatId = body.id;
     });
 
+    it('guest activates the hana DeepTalk chat (triggers greeting)', async () => {
+      const { status, body } = await api('PATCH', `/chats/${guestHanaDeepTalkChatId}`, auth.guest.jwt, { active: true });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('active', true);
+    });
+
     it('guestChatProcessEvents after chat creation', async () => {
       await waitForQueuesEmpty(60000);
 
@@ -745,7 +780,8 @@ export function describeTransactions() {
       const messages = processEvents.Message || [];
       const ttsJobs = processEvents.TtsJob || [];
 
-      expect(chats.length).toBe(2);
+      // 2 from create, 2 from activation
+      expect(chats.length).toBe(4);
       expect(messages.length).toBe(4);
       expect(ttsJobs.length).toBe(4);
 

@@ -4,6 +4,7 @@ import { BaseProcessor } from '../queue/processor';
 import { prisma, model } from '../db';
 import { buildAndCacheSystemPrompt } from './systemPrompt';
 import { invalidateChatHistory } from '../llm/chatHistory';
+import { redisConnection } from '../queue/connection';
 
 const scalarFields = Object.values(Prisma.ChatScalarFieldEnum) as Prisma.ChatScalarFieldEnum[];
 
@@ -35,15 +36,39 @@ class ChatsProcessor extends BaseProcessor<Chat> {
     }
 
     if (sttProvider) {
+      // No original passed — the CUD service re-fetches the current row so the
+      // update diff doesn't phantom-report fields changed since this snapshot
+      // (e.g. active flipped by the client right after create).
       await model.chat.update({
         where: { id: chat.id },
         data: { sttProvider: { connect: { id: sttProvider.id } } },
-      }, chat);
+      });
     }
   }
 
   protected override getFieldHandlers(job: Job, chat: Chat) {
     return {
+      active: async () => {
+        // Chat activated by a connected client — send the scenario greeting once
+        if (!chat.active) return;
+        const messageCount = await prisma.message.count({ where: { chatId: chat.id } });
+        if (messageCount > 0) return;
+        const scenario = await prisma.scenario.findUnique({ where: { id: chat.scenarioId } });
+        if (!scenario?.greeting) return;
+        // Concurrent updated-jobs (two workers) can both see the activation —
+        // claim the greeting atomically so only one creates it
+        const claimed = await redisConnection.set(`chat:greeted:${chat.id}`, '1', 'EX', 300, 'NX');
+        if (!claimed) return;
+        console.log(`[chat] ${chat.id} activated — creating greeting message`);
+        await model.message.create({
+          data: {
+            role: 'ASSISTANT',
+            content: scenario.greeting,
+            chat: { connect: { id: chat.id } },
+            user: { connect: { id: chat.userId } },
+          },
+        });
+      },
       action: async () => {
         switch (chat.action) {
           case 'Init':

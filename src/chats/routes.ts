@@ -90,6 +90,8 @@ export const chatsRoutes = new Elysia({ prefix: '/chats' })
       if (!(hasEnoughTokens || hasSponsorship)) { set.status = 403; return { error: 'Insufficient tokens or sponsorship' }; }
     }
 
+    // Chats start deactivated — the client activates once connected (PATCH active: true),
+    // which triggers the greeting message via the chat processor.
     const chat = await model.chat.create({
       data: {
         user: { connect: { id: user.userId } },
@@ -99,18 +101,6 @@ export const chatsRoutes = new Elysia({ prefix: '/chats' })
       },
       include: chatDetailInclude,
     });
-
-    // Create greeting message if scenario has one (enqueue AFTER chat so processors run in order)
-    if (scenario?.greeting) {
-      await model.message.create({
-        data: {
-          role: 'ASSISTANT',
-          content: scenario.greeting,
-          chat: { connect: { id: chat.id } },
-          user: { connect: { id: user.userId } },
-        },
-      });
-    }
     return chat;
   }, {
     body: Body({
@@ -160,6 +150,7 @@ export const chatsRoutes = new Elysia({ prefix: '/chats' })
       sttProviderId: t.Optional(t.String()),
       scenarioId: t.Optional(t.String()),
       tts: t.Optional(t.Boolean()),
+      active: t.Optional(t.Boolean()),
       action: t.Optional(t.Union([t.Literal('Init'), t.Literal('RefreshSystemPrompt'), t.Literal('Summarize'), t.Literal('Nothing')])),
     }),
   })

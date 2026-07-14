@@ -20,8 +20,10 @@ export async function ttsSubscriberCount(chatId: string): Promise<number> {
   return Number(res?.[1] ?? 0);
 }
 
+const SUBSCRIBER_WAIT_MS = parseInt(process.env.TTS_SUBSCRIBER_WAIT_MS ?? '15000');
+
 /** Wait until someone subscribes to the chat's tts stream. Resolves false on timeout. */
-export async function waitForTtsSubscriber(chatId: string, timeoutMs = 15000, intervalMs = 250): Promise<boolean> {
+export async function waitForTtsSubscriber(chatId: string, timeoutMs = SUBSCRIBER_WAIT_MS, intervalMs = 250): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if ((await ttsSubscriberCount(chatId)) > 0) return true;

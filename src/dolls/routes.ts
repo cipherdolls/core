@@ -91,6 +91,8 @@ export const dollsRoutes = new Elysia({ prefix: '/dolls' })
             if (scenario) {
               const chat = await model.chat.create({
                 data: {
+                  // Dolls have no webapp to activate the chat — start active
+                  active: true,
                   user: { connect: { id: user.userId } },
                   avatar: { connect: { id: dollBody.avatarId } },
                   scenario: { connect: { id: scenario.id } },

@@ -429,7 +429,22 @@ export function describeChats() {
       expect(typeof body._count.chatCompletionJobs).toBe('number');
     });
 
-    // ─── Greeting message ───────────────────────────────────────
+    // ─── Greeting message (created on activation) ───────────────
+
+    it('hanaChat has no messages before activation', async () => {
+      const { status, body } = await api('GET', `/messages?chatId=${hanaChatId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+      expect(body.data.length).toBe(0);
+    });
+
+    it('alice activates the hanaChat (triggers greeting)', async () => {
+      const { status, body } = await api('PATCH', `/chats/${hanaChatId}`, auth.alice.jwt, { active: true });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('active', true);
+      await waitForQueuesEmpty(60000);
+      aliceChatProcessEvents = [];
+      aliceUserProcessEvents = [];
+    });
 
     let hanaChatMessage1Id: string;
     it('alice gets her 1 greeting message from hanaChat', async () => {
@@ -579,6 +594,15 @@ export function describeChats() {
       expect(body.data.length).toBe(2);
     });
 
+    it('alice activates the joiChat (triggers greeting)', async () => {
+      const { status, body } = await api('PATCH', `/chats/${joiChatId}`, auth.alice.jwt, { active: true });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('active', true);
+      await waitForQueuesEmpty(60000);
+      aliceChatProcessEvents = [];
+      aliceUserProcessEvents = [];
+    });
+
     it('alice refreshes joiChat system-prompt', async () => {
       const { status } = await api('PATCH', `/chats/${joiChatId}`, auth.alice.jwt, { action: 'RefreshSystemPrompt' });
       expect(status).toBe(200);
@@ -661,6 +685,15 @@ export function describeChats() {
       const events = groupByResourceName(bobChatProcessEvents);
       expect(events.Chat).toBeDefined();
       bobChatProcessEvents = [];
+    });
+
+    it('bob activates the freya Chat (triggers greeting)', async () => {
+      const { status, body } = await api('PATCH', `/chats/${freyaChatId}`, auth.bob.jwt, { active: true });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('active', true);
+      await waitForQueuesEmpty(60000);
+      bobChatProcessEvents = [];
+      bobUserProcessEvents = [];
     });
 
     // ─── Avatar visibility with active chat avatars ─────────────
