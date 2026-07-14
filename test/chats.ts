@@ -834,6 +834,22 @@ export function describeChats() {
       aliceChatProcessEvents = [];
     });
 
+    it('alice updates the custom joiChat avatar to freya (linked to the not mixable smallTalkScenario)', async () => {
+      const { status, body } = await api('PATCH', `/chats/${customJoiChatId}`, auth.alice.jwt, {
+        avatarId: freyaId,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('avatarId', freyaId);
+    });
+
+    it('aliceChatProcessEvents after custom joiChat avatar update', async () => {
+      await waitForQueuesEmpty(60000);
+      const events = groupByResourceName(aliceChatProcessEvents);
+      const chatEvents = events.Chat || [];
+      expect(chatEvents.length).toBeGreaterThanOrEqual(2);
+      aliceChatProcessEvents = [];
+    });
+
     it('alice delete the custom joiChat', async () => {
       const { status } = await api('DELETE', `/chats/${customJoiChatId}`, auth.alice.jwt);
       expect(status).toBe(200);
@@ -1006,16 +1022,6 @@ export function describeChats() {
       aliceChatProcessEvents = [];
     });
 
-    it('alice deletes the freya alien chat', async () => {
-      const { status } = await api('DELETE', `/chats/${freyaAlienChatId}`, auth.alice.jwt);
-      expect(status).toBe(200);
-    });
-
-    it('drain events after freya alien chat delete', async () => {
-      await waitForQueuesEmpty(60000);
-      aliceChatProcessEvents = [];
-    });
-
     it('alice sets hana avatar to not mixable', async () => {
       const { status, body } = await api('PATCH', `/avatars/${hanaId}`, auth.alice.jwt, {
         mixable: false,
@@ -1031,6 +1037,24 @@ export function describeChats() {
       });
       expect(status).toBe(400);
       expect(body.error).toContain('not allowed');
+    });
+
+    it('alice can not update the freya alien chat avatar to hana (not mixable, alien not linked)', async () => {
+      const { status, body } = await api('PATCH', `/chats/${freyaAlienChatId}`, auth.alice.jwt, {
+        avatarId: hanaId,
+      });
+      expect(status).toBe(400);
+      expect(body.error).toContain('not allowed');
+    });
+
+    it('alice deletes the freya alien chat', async () => {
+      const { status } = await api('DELETE', `/chats/${freyaAlienChatId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+    });
+
+    it('drain events after freya alien chat delete', async () => {
+      await waitForQueuesEmpty(60000);
+      aliceChatProcessEvents = [];
     });
 
     it('alice links hana to the alien scenario', async () => {
