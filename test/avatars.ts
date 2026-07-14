@@ -1184,6 +1184,46 @@ export function describeAvatars() {
       expect(status).toBe(404);
     });
 
+    // ─── PATCH recomputes free from TTS voice ──────────────────
+
+    let paidTtsProviderId: string;
+
+    it('avatar free flag follows the tts voice cost on PATCH (via processor)', async () => {
+      const { body: paidProvider } = await api('POST', '/tts-providers', auth.admin.jwt, {
+        name: 'PaidTestTts', dollarPerCharacter: 0.0001,
+      });
+      paidTtsProviderId = paidProvider.id;
+      const { body: paidVoice } = await api('POST', '/tts-voices', auth.admin.jwt, {
+        ttsProviderId: paidTtsProviderId, name: 'PaidVoice', providerVoiceId: 'paid_test',
+      });
+
+      const { body: hana } = await api('GET', `/avatars/${hanaAvatarId}`, auth.alice.jwt);
+      expect(hana.free).toBe(true);
+
+      const { status: paidStatus } = await api('PATCH', `/avatars/${hanaAvatarId}`, auth.alice.jwt, {
+        ttsVoiceId: paidVoice.id,
+      });
+      expect(paidStatus).toBe(200);
+      await waitForQueuesEmpty(60000);
+      const { body: afterPaid } = await api('GET', `/avatars/${hanaAvatarId}`, auth.alice.jwt);
+      expect(afterPaid).toHaveProperty('free', false);
+
+      const { status: freeStatus } = await api('PATCH', `/avatars/${hanaAvatarId}`, auth.alice.jwt, {
+        ttsVoiceId: hana.ttsVoiceId,
+      });
+      expect(freeStatus).toBe(200);
+      await waitForQueuesEmpty(60000);
+      const { body: afterFree } = await api('GET', `/avatars/${hanaAvatarId}`, auth.alice.jwt);
+      expect(afterFree).toHaveProperty('free', true);
+    });
+
+    it('cleanup paid tts provider and drain events', async () => {
+      await api('DELETE', `/tts-providers/${paidTtsProviderId}`, auth.admin.jwt);
+      await waitForQueuesEmpty(60000);
+      aliceUserProcessEvents = [];
+      bobUserProcessEvents = [];
+    });
+
     // ─── MQTT cleanup ──────────────────────────────────────────
 
     it('no unprocessed events remaining', async () => {

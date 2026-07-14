@@ -1,7 +1,7 @@
 import type { Job } from 'bullmq';
 import { Prisma, type TtsVoice } from '@prisma/client';
 import { BaseProcessor } from '../queue/processor';
-import { prisma } from '../db';
+import { prisma, model } from '../db';
 import { tts } from '../tts/tts.helper';
 
 const ASSETS_PATH = process.env.ASSETS_PATH ?? '/app/uploads';
@@ -26,6 +26,10 @@ class TtsVoicesProcessor extends BaseProcessor<TtsVoice> {
   protected override getFieldHandlers(_job: Job, voice: TtsVoice) {
     return {
       providerVoiceId: () => this.generatePreview(voice),
+      ttsProviderId: async () => {
+        await this.generatePreview(voice);
+        await this.updateAvatarsFree(voice);
+      },
       action: async () => {
         switch (voice.action) {
           case 'CreateExampleAudio':
@@ -44,6 +48,18 @@ class TtsVoicesProcessor extends BaseProcessor<TtsVoice> {
         });
       },
     };
+  }
+
+  /** Avatar.free derives from the voice's provider cost — propagate when the provider changes */
+  private async updateAvatarsFree(voice: TtsVoice): Promise<void> {
+    const ttsProvider = await prisma.ttsProvider.findUnique({ where: { id: voice.ttsProviderId } });
+    if (!ttsProvider) return;
+    const free = Number(ttsProvider.dollarPerCharacter) === 0;
+    const avatars = await prisma.avatar.findMany({ where: { ttsVoiceId: voice.id, free: { not: free } } });
+    for (const avatar of avatars) {
+      await model.avatar.update({ where: { id: avatar.id }, data: { free } }, avatar);
+    }
+    if (avatars.length) console.log(`[ttsVoice] ${voice.id} provider changed — set free=${free} on ${avatars.length} avatar(s)`);
   }
 
   private async generatePreview(voice: TtsVoice): Promise<void> {
