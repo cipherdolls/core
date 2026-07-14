@@ -7,7 +7,7 @@ import { parsePagination, paginationMeta } from '../helpers/pagination';
 
 const avatarInclude = {
   ttsVoice: true,
-  scenarios: true,
+  scenarios: { include: { picture: true } },
   _count: { select: { chats: true } },
   picture: true,
   audio: true,
