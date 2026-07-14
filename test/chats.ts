@@ -151,6 +151,7 @@ export function describeChats() {
     it('alice creates a paid avatar (non-free TTS voice)', async () => {
       const { status, body } = await api('POST', '/avatars', auth.alice.jwt, {
         name: 'PaidAvatar', shortDesc: 'Costs money', character: 'expensive', ttsVoiceId: paidTtsVoiceId, published: true,
+        scenarioIds: [smallTalkScenarioId],
       });
       expect(status).toBe(200);
       expect(body).toHaveProperty('free', false);
@@ -217,6 +218,7 @@ export function describeChats() {
         chatModelId: chatModel.id,
         dollarPerMessage: 0.05,
         published: true,
+        avatarIds: [hanaId],
       });
       expect(status).toBe(200);
       expect(body).toHaveProperty('free', false);
@@ -767,6 +769,43 @@ export function describeChats() {
       aliceChatProcessEvents = [];
     });
 
+    // ─── Avatar-scenario restriction ────────────────────────────
+    // A non-mixable scenario only allows its linked avatars.
+    // SmallTalk is linked to hana and freya — joi is not one of them.
+
+    it('alice sets her smallTalkScenario to not mixable', async () => {
+      const { status, body } = await api('PATCH', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt, {
+        mixable: false,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('mixable', false);
+    });
+
+    it('alice can not create a joi Chat with the not mixable smallTalkScenario (avatar not linked)', async () => {
+      const { status, body } = await api('POST', '/chats', auth.alice.jwt, {
+        avatarId: joiAvatarId,
+        scenarioId: smallTalkScenarioId,
+      });
+      expect(status).toBe(400);
+      expect(body.error).toContain('not allowed');
+    });
+
+    it('alice can not update the joi Chat to the not mixable smallTalkScenario (avatar not linked)', async () => {
+      const { status, body } = await api('PATCH', `/chats/${joiChatId}`, auth.alice.jwt, {
+        scenarioId: smallTalkScenarioId,
+      });
+      expect(status).toBe(400);
+      expect(body.error).toContain('not allowed');
+    });
+
+    it('alice adds joi to her smallTalkScenario', async () => {
+      const { status, body } = await api('PATCH', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt, {
+        avatarIds: [hanaId, freyaId, joiAvatarId],
+      });
+      expect(status).toBe(200);
+      expect(body.avatars).toHaveLength(3);
+    });
+
     // ─── Create + delete custom joi chat ────────────────────────
 
     let customJoiChatId: string;
@@ -788,6 +827,22 @@ export function describeChats() {
     });
 
     it('aliceChatProcessEvents after customJoiChat creation', async () => {
+      await waitForQueuesEmpty(60000);
+      const events = groupByResourceName(aliceChatProcessEvents);
+      const chatEvents = events.Chat || [];
+      expect(chatEvents.length).toBeGreaterThanOrEqual(2);
+      aliceChatProcessEvents = [];
+    });
+
+    it('alice updates the custom joiChat avatar to freya (linked to the not mixable smallTalkScenario)', async () => {
+      const { status, body } = await api('PATCH', `/chats/${customJoiChatId}`, auth.alice.jwt, {
+        avatarId: freyaId,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('avatarId', freyaId);
+    });
+
+    it('aliceChatProcessEvents after custom joiChat avatar update', async () => {
       await waitForQueuesEmpty(60000);
       const events = groupByResourceName(aliceChatProcessEvents);
       const chatEvents = events.Chat || [];
@@ -817,6 +872,19 @@ export function describeChats() {
       const { status, body } = await api('GET', '/chats', auth.alice.jwt);
       expect(status).toBe(200);
       expect(body.data.length).toBe(2);
+    });
+
+    it('alice restores her smallTalkScenario to mixable', async () => {
+      const { status, body } = await api('PATCH', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt, {
+        mixable: true,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('mixable', true);
+    });
+
+    it('drain events after smallTalkScenario mixable restore', async () => {
+      await waitForQueuesEmpty(60000);
+      aliceChatProcessEvents = [];
     });
 
     // ─── 401 — Unauthenticated access ──────────────────────────
@@ -933,8 +1001,70 @@ export function describeChats() {
     });
 
     // ─── Alien ROLEPLAY chat ────────────────────────────────────
+    // The alien scenario has no linked avatars, so mixable avatars can use
+    // it freely. A non-mixable avatar is restricted to its linked scenarios.
 
     let alienChatId: string;
+    let freyaAlienChatId: string;
+    it('freya (mixable by default) can create a chat in the unlinked alien scenario', async () => {
+      const { status, body } = await api('POST', '/chats', auth.alice.jwt, {
+        avatarId: freyaId,
+        scenarioId: alienScenarioId,
+        tts: false,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('id');
+      freyaAlienChatId = body.id;
+    });
+
+    it('drain events after freya alien chat creation', async () => {
+      await waitForQueuesEmpty(60000);
+      aliceChatProcessEvents = [];
+    });
+
+    it('alice sets hana avatar to not mixable', async () => {
+      const { status, body } = await api('PATCH', `/avatars/${hanaId}`, auth.alice.jwt, {
+        mixable: false,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('mixable', false);
+    });
+
+    it('alice can not create an alien chat with hana (not mixable, alien not linked)', async () => {
+      const { status, body } = await api('POST', '/chats', auth.alice.jwt, {
+        avatarId: hanaId,
+        scenarioId: alienScenarioId,
+      });
+      expect(status).toBe(400);
+      expect(body.error).toContain('not allowed');
+    });
+
+    it('alice can not update the freya alien chat avatar to hana (not mixable, alien not linked)', async () => {
+      const { status, body } = await api('PATCH', `/chats/${freyaAlienChatId}`, auth.alice.jwt, {
+        avatarId: hanaId,
+      });
+      expect(status).toBe(400);
+      expect(body.error).toContain('not allowed');
+    });
+
+    it('alice deletes the freya alien chat', async () => {
+      const { status } = await api('DELETE', `/chats/${freyaAlienChatId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+    });
+
+    it('drain events after freya alien chat delete', async () => {
+      await waitForQueuesEmpty(60000);
+      aliceChatProcessEvents = [];
+    });
+
+    it('alice links hana to the alien scenario', async () => {
+      const { status, body } = await api('PATCH', `/scenarios/${alienScenarioId}`, auth.alice.jwt, {
+        avatarIds: [hanaId],
+      });
+      expect(status).toBe(200);
+      expect(body.avatars).toHaveLength(1);
+    });
+
     it('alice creates an alien ROLEPLAY chat with hana', async () => {
       const { status, body } = await api('POST', '/chats', auth.alice.jwt, {
         avatarId: hanaId,
@@ -957,6 +1087,19 @@ export function describeChats() {
       expect(aliceChatProcessEvents.length).toBeGreaterThan(0);
       const events = groupByResourceName(aliceChatProcessEvents);
       expect(events.Chat).toBeDefined();
+      aliceChatProcessEvents = [];
+    });
+
+    it('alice restores hana avatar to mixable', async () => {
+      const { status, body } = await api('PATCH', `/avatars/${hanaId}`, auth.alice.jwt, {
+        mixable: true,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('mixable', true);
+    });
+
+    it('drain events after hana mixable restore', async () => {
+      await waitForQueuesEmpty(60000);
       aliceChatProcessEvents = [];
     });
 

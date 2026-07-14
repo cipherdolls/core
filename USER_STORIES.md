@@ -139,6 +139,7 @@ Derived from E2E test specs. Each story represents verified behavior tested agai
 - Users see their own + published scenarios; anonymous sees only published
 - Scenarios support NORMAL and ROLEPLAY types
 - Scenarios can have gender preferences (userGender, avatarGender)
+- Scenarios have a `mixable` flag (default true); when false, the scenario can only be used by its linked avatars
 - NSFW flag controls content filtering
 - Published scenarios cannot be deleted by non-admin owners
 - Guest (0 tokens) cannot create scenarios (403)
@@ -153,6 +154,7 @@ Derived from E2E test specs. Each story represents verified behavior tested agai
 - Avatars can be published (only if all assigned scenarios are published)
 - Admin can set recommended flag
 - Avatars link to multiple scenarios (many-to-many)
+- Avatars have a `mixable` flag (default true); when false, the avatar can only chat in its linked scenarios
 - Users see their own + chatted-with avatars; anonymous sees only published
 - Private avatars are only visible to their owner
 - Guest (0 tokens) cannot create avatars (403)
@@ -164,6 +166,10 @@ Derived from E2E test specs. Each story represents verified behavior tested agai
 
 ### Conversation Sessions
 - Users can create chats by selecting an avatar and scenario
+- **Linked avatar + scenario**: can always be combined in a chat
+- **Scenario with `mixable: false`**: only its linked avatars can be used in a chat (400 for others)
+- **Avatar with `mixable: false`**: only its linked scenarios can be used in a chat (400 for others)
+- **Mixable avatar + mixable scenario**: can be combined freely (default)
 - **Free scenario + free avatar**: guest (0 tokens) CAN create a chat
 - **Paid scenario (dollarPerMessage > 0)**: guest CANNOT create a chat (403)
 - **Free scenario + paid avatar (non-free TTS)**: guest CANNOT create a chat (403)
@@ -171,7 +177,7 @@ Derived from E2E test specs. Each story represents verified behavior tested agai
 - **Sponsorship removed**: guest is blocked again
 - Users with tokens can always create chats regardless of pricing
 - Chats include nested scenario (with models), avatar, STT provider, and doll
-- Users can switch scenarios on an existing chat
+- Users can switch scenarios on an existing chat (the avatar-scenario combination is re-validated)
 - Users can enable/disable TTS on a chat
 - Users can only access their own chats (404 for others)
 - System prompts are generated from avatar + scenario + user context

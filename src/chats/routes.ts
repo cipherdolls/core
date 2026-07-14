@@ -73,8 +73,16 @@ export const chatsRoutes = new Elysia({ prefix: '/chats' })
     if (!avatar) { set.status = 404; return { error: 'Avatar not found' }; }
 
     // Validate scenario exists
-    const scenario = await prisma.scenario.findUnique({ where: { id: body.scenarioId } });
+    const scenario = await prisma.scenario.findUnique({ where: { id: body.scenarioId }, include: { avatars: { select: { id: true } } } });
     if (!scenario) { set.status = 404; return { error: 'Scenario not found' }; }
+
+    // A non-mixable scenario only allows its linked avatars, and a
+    // non-mixable avatar only allows its linked scenarios.
+    const isLinked = scenario.avatars.some((a) => a.id === body.avatarId);
+    if (!isLinked && (!scenario.mixable || !avatar.mixable)) {
+      set.status = 400;
+      return { error: 'Avatar is not allowed for this scenario' };
+    }
 
     // Token balance enforcement — free scenarios/avatars skip the check
     const isFreeScenario = scenario.free;
@@ -141,6 +149,25 @@ export const chatsRoutes = new Elysia({ prefix: '/chats' })
     if (sttProviderId) {
       const sttProvider = await prisma.sttProvider.findUnique({ where: { id: sttProviderId } });
       if (!sttProvider) { set.status = 404; return { error: 'STT Provider not found' }; }
+    }
+
+    // A non-mixable scenario only allows its linked avatars, and a
+    // non-mixable avatar only allows its linked scenarios.
+    if (avatarId || scenarioId) {
+      const targetAvatarId = avatarId ?? item.avatarId;
+      const [targetScenario, targetAvatar] = await Promise.all([
+        prisma.scenario.findUnique({
+          where: { id: scenarioId ?? item.scenarioId },
+          include: { avatars: { select: { id: true } } },
+        }),
+        prisma.avatar.findUnique({ where: { id: targetAvatarId } }),
+      ]);
+      const isLinked = targetScenario?.avatars.some((a) => a.id === targetAvatarId) ?? false;
+      const isRestricted = targetScenario?.mixable === false || targetAvatar?.mixable === false;
+      if (!isLinked && isRestricted) {
+        set.status = 400;
+        return { error: 'Avatar is not allowed for this scenario' };
+      }
     }
 
     const updated = await model.chat.update({
