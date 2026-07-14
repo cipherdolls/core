@@ -304,6 +304,25 @@ export function describeScenarios() {
       expect(body).toHaveProperty('avatarGender', 'Female');
     });
 
+    // ─── Admin all=true ────────────────────────────────────────
+
+    it('admin -> all=true returns every scenario (incl. private of other users)', async () => {
+      const { status, body } = await api('GET', '/scenarios?all=true', auth.admin.jwt);
+      expect(status).toBe(200);
+      expect(body.meta.total).toBe(3);
+      const ids = body.data.map((s: any) => s.id);
+      expect(ids).toContain(bobDeepTalkScenarioId);
+      expect(ids).toContain(smallTalkScenarioId);
+    });
+
+    it('alice -> all=true is ignored for non-admin (own + published only)', async () => {
+      const { status, body } = await api('GET', '/scenarios?all=true', auth.alice.jwt);
+      expect(status).toBe(200);
+      expect(body.meta.total).toBe(2);
+      const ids = body.data.map((s: any) => s.id);
+      expect(ids).not.toContain(bobDeepTalkScenarioId);
+    });
+
     // ─── Cross-user access ─────────────────────────────────────
 
     it('alice dont get the private bobDeepTalkScenario', async () => {

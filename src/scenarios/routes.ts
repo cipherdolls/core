@@ -34,6 +34,8 @@ export const scenariosRoutes = new Elysia({ prefix: '/scenarios' })
     if (!user) {
       // Unauthenticated: only published
       where.published = true;
+    } else if (query.all === 'true' && user.role === 'ADMIN') {
+      // Admin: no scoping — list every scenario
     } else if (query.mine === 'true') {
       where.userId = user.userId;
     } else if (query.published === 'true') {
