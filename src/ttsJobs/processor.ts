@@ -4,7 +4,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { BaseProcessor } from '../queue/processor';
 import { prisma, model } from '../db';
 import { tts } from '../tts/tts.helper';
-import { publishTtsStart, publishTtsChunk, publishTtsEnd, publishTtsError } from '../redisPubSub/redisPubSub';
+import { publishTtsStart, publishTtsChunk, publishTtsEnd, publishTtsError, waitForTtsSubscriber } from '../redisPubSub/redisPubSub';
 
 const ASSETS_PATH = process.env.ASSETS_PATH ?? '/app/uploads';
 const MASTER_WALLET_ADDRESS = process.env.MASTER_WALLET_ADDRESS!;
@@ -34,9 +34,20 @@ class TtsJobsProcessor extends BaseProcessor<TtsJob> {
     });
     if (!message?.content || !message.chat?.avatar?.ttsVoice) return;
 
+    // The chat's first message (scenario greeting) is created before the client
+    // has subscribed to the audio stream — wait for the subscriber before streaming.
+    const isFirstMessage = (await prisma.message.count({
+      where: { chatId: message.chatId, id: { not: message.id } },
+    })) === 0;
+
     try {
       const voice = message.chat.avatar.ttsVoice;
       const provider = voice.ttsProvider;
+
+      if (isFirstMessage) {
+        const found = await waitForTtsSubscriber(message.chatId);
+        if (!found) console.warn(`[ttsJob] No stream subscriber for greeting on chat ${message.chatId} — streaming anyway`);
+      }
 
       publishTtsStart(message.chatId, message.id);
       let chunkCount = 0;

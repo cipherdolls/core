@@ -14,6 +14,22 @@ function channel(chatId: string): string {
   return `tts:stream:${chatId}`;
 }
 
+/** Number of active subscribers on a chat's tts stream channel */
+export async function ttsSubscriberCount(chatId: string): Promise<number> {
+  const res = (await publisher.pubsub('NUMSUB', channel(chatId))) as [string, number];
+  return Number(res?.[1] ?? 0);
+}
+
+/** Wait until someone subscribes to the chat's tts stream. Resolves false on timeout. */
+export async function waitForTtsSubscriber(chatId: string, timeoutMs = 15000, intervalMs = 250): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if ((await ttsSubscriberCount(chatId)) > 0) return true;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return false;
+}
+
 export function publishTtsStart(chatId: string, messageId: string, format = 'mp3'): void {
   const payload = Buffer.from(JSON.stringify({ messageId, format }));
   const msg = Buffer.concat([Buffer.from([0x01]), payload]);
