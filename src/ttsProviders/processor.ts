@@ -17,7 +17,10 @@ class TtsProvidersProcessor extends BaseProcessor<TtsProvider> {
   protected override getFieldHandlers(_job: Job, provider: TtsProvider) {
     return {
       dollarPerCharacter: async () => {
-        const free = Number(provider.dollarPerCharacter) === 0;
+        // Job payloads mangle Decimal fields — read the price from the DB
+        const dbProvider = await prisma.ttsProvider.findUnique({ where: { id: provider.id } });
+        if (!dbProvider) return;
+        const free = Number(dbProvider.dollarPerCharacter) === 0;
         const avatars = await prisma.avatar.findMany({
           where: { ttsVoice: { ttsProviderId: provider.id }, free: { not: free } },
         });

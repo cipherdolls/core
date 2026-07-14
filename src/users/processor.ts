@@ -49,7 +49,10 @@ class UsersProcessor extends BaseProcessor<User> {
   }
 
   private async removeExpiredSponsorships(user: User): Promise<void> {
-    const spendable = Number(user.tokenSpendable ?? 0);
+    // Job payloads mangle Decimal fields — read the balance from the DB
+    const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
+    if (!dbUser) return;
+    const spendable = Number(dbUser.tokenSpendable ?? 0);
     if (spendable >= 1) return;
 
     const sponsorships = await prisma.sponsorship.findMany({ where: { userId: user.id } });
