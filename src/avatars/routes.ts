@@ -30,6 +30,8 @@ export const avatarsRoutes = new Elysia({ prefix: '/avatars' })
     if (!user) {
       // Unauthenticated: only published
       where.published = true;
+    } else if (query.all === 'true' && user.role === 'ADMIN') {
+      // Admin: no scoping — list every avatar
     } else if (query.mine === 'true') {
       where.userId = user.userId;
     } else if (query.published === 'true') {

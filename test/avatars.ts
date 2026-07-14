@@ -778,6 +778,30 @@ export function describeAvatars() {
       expect(body.meta.total).toBe(0);
     });
 
+    // ─── Admin all=true ────────────────────────────────────────
+
+    it('admin -> all=true returns every avatar (incl. private of other users)', async () => {
+      const { status, body } = await api('GET', '/avatars?all=true', auth.admin.jwt);
+      expect(status).toBe(200);
+      const names = body.data.map((a: any) => a.name).sort();
+      expect(names).toEqual(['Freya', 'Hana', 'Joi']);
+      expect(body.meta.total).toBe(3);
+    });
+
+    it('alice -> all=true is ignored for non-admin (default own + chat scope)', async () => {
+      const { status, body } = await api('GET', '/avatars?all=true', auth.alice.jwt);
+      expect(status).toBe(200);
+      const names = body.data.map((a: any) => a.name).sort();
+      expect(names).toEqual(['Freya', 'Hana']);
+    });
+
+    it('bob -> all=true is ignored for non-admin (only Joi)', async () => {
+      const { status, body } = await api('GET', '/avatars?all=true', auth.bob.jwt);
+      expect(status).toBe(200);
+      expect(body.data).toHaveLength(1);
+      expect(body.data[0]).toHaveProperty('name', 'Joi');
+    });
+
     // ─── Recommended tests ─────────────────────────────────────
 
     it('alice (non-admin) cannot set recommended on her hana avatar', async () => {
