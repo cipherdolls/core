@@ -11,6 +11,7 @@ export { chatModelsProcessor } from '../chatModels/processor';
 export { embeddingModelsProcessor } from '../embeddingModels/processor';
 export { reasoningModelsProcessor } from '../reasoningModels/processor';
 export { sttProvidersProcessor } from '../sttProviders/processor';
+export { groupsProcessor } from '../groups/processor';
 export { ttsProvidersProcessor } from '../ttsProviders/processor';
 export { ttsVoicesProcessor } from '../ttsVoices/processor';
 export { transactionsProcessor } from '../transactions/processor';

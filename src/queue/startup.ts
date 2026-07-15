@@ -12,6 +12,7 @@ import {
   embeddingModelsProcessor,
   reasoningModelsProcessor,
   sttProvidersProcessor,
+  groupsProcessor,
   ttsProvidersProcessor,
   ttsVoicesProcessor,
   transactionsProcessor,
@@ -42,6 +43,7 @@ export function startWorkers() {
   registerWorker('embeddingModel', (job) => embeddingModelsProcessor.process(job));
   registerWorker('reasoningModel', (job) => reasoningModelsProcessor.process(job));
   registerWorker('sttProvider', (job) => sttProvidersProcessor.process(job));
+  registerWorker('group', (job) => groupsProcessor.process(job));
   registerWorker('ttsProvider', (job) => ttsProvidersProcessor.process(job));
   registerWorker('ttsVoice', (job) => ttsVoicesProcessor.process(job));
   registerWorker('transaction', (job) => transactionsProcessor.process(job));

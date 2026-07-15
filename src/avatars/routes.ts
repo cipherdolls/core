@@ -26,6 +26,7 @@ export const avatarsRoutes = new Elysia({ prefix: '/avatars' })
     if (query.gender) where.gender = query.gender;
     if (query.recommended === 'true') where.recommended = true;
     if (query.free === 'true') where.free = true;
+    if (query.group) where.groups = { some: { OR: [{ id: query.group }, { slug: query.group }] } };
 
     if (!user) {
       // Unauthenticated: only published

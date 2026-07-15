@@ -15,6 +15,7 @@ export const model = {
   embeddingModel: createCudService('embeddingModel', prisma.embeddingModel),
   fillerWord: createCudService('fillerWord', prisma.fillerWord),
   firmware: createCudService('firmware', prisma.firmware),
+  group: createCudService('group', prisma.group),
   message: createCudService('message', prisma.message),
   reasoningModel: createCudService('reasoningModel', prisma.reasoningModel),
   scenario: createCudService('scenario', prisma.scenario),

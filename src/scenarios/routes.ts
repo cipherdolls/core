@@ -30,6 +30,7 @@ export const scenariosRoutes = new Elysia({ prefix: '/scenarios' })
     if (query.nsfw === 'false') where.nsfw = false;
     if (query.hasSponsorship === 'true') where.sponsorships = { some: {} };
     if (query.hasSponsorship === 'false') where.sponsorships = { none: {} };
+    if (query.group) where.groups = { some: { OR: [{ id: query.group }, { slug: query.group }] } };
 
     if (!user) {
       // Unauthenticated: only published

@@ -87,7 +87,7 @@ export const picturesRoutes = new Elysia({ prefix: '/pictures' })
     }
 
     // Exactly one entity ID must be provided
-    const entityKeys = ['dollId', 'dollBodyId', 'avatarId', 'scenarioId', 'sttProviderId', 'aiProviderId', 'ttsProviderId'] as const;
+    const entityKeys = ['dollId', 'dollBodyId', 'avatarId', 'scenarioId', 'sttProviderId', 'aiProviderId', 'ttsProviderId', 'groupId'] as const;
     const provided = entityKeys.filter((k) => (body as any)[k]);
     if (provided.length !== 1) {
       set.status = 400;
@@ -122,6 +122,7 @@ export const picturesRoutes = new Elysia({ prefix: '/pictures' })
       sttProviderId: t.Optional(t.String()),
       aiProviderId: t.Optional(t.String()),
       ttsProviderId: t.Optional(t.String()),
+      groupId: t.Optional(t.String()),
     }),
   })
 

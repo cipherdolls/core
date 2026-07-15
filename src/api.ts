@@ -12,6 +12,7 @@ import { chatModelsRoutes } from './chatModels/routes';
 import { embeddingModelsRoutes } from './embeddingModels/routes';
 import { reasoningModelsRoutes } from './reasoningModels/routes';
 import { sttProvidersRoutes } from './sttProviders/routes';
+import { groupsRoutes } from './groups/routes';
 import { ttsProvidersRoutes } from './ttsProviders/routes';
 import { ttsVoicesRoutes } from './ttsVoices/routes';
 import { scenariosRoutes } from './scenarios/routes';
@@ -61,6 +62,7 @@ const app = new Elysia({ normalize: true })
   .use(embeddingModelsRoutes)
   .use(reasoningModelsRoutes)
   .use(sttProvidersRoutes)
+  .use(groupsRoutes)
   .use(ttsProvidersRoutes)
   .use(ttsVoicesRoutes)
   .use(scenariosRoutes)

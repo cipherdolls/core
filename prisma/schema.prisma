@@ -38,6 +38,7 @@ model User {
   tokenPermits TokenPermit[]
   sponsorships Sponsorship[]
   apiKeys      ApiKey[]
+  groups       Group[]
 
   invitedBy   User?   @relation("UserInvites", fields: [invitedById], references: [id], onDelete: SetNull)
   invitedById String?
@@ -82,6 +83,8 @@ model Picture {
   aiProviderId  String?      @unique
   ttsProvider   TtsProvider? @relation(fields: [ttsProviderId], references: [id], onDelete: Cascade)
   ttsProviderId String?      @unique
+  group         Group?       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId       String?      @unique
 }
 
 model Audio {
@@ -174,6 +177,23 @@ model Avatar {
   dollBodies DollBody[]
   scenarios  Scenario[]
   fillerWords FillerWord[]
+  groups     Group[]
+}
+
+model Group {
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  name        String
+  slug        String   @unique
+  title       String?
+  description String?
+  picture     Picture?
+  published   Boolean  @default(false)
+  user      User       @relation(fields: [userId], references: [id])
+  userId    String
+  avatars   Avatar[]
+  scenarios Scenario[]
 }
 
 model FillerWord {
@@ -220,6 +240,7 @@ model Scenario {
   chats            Chat[]
   avatars          Avatar[]
   sponsorships     Sponsorship[]
+  groups           Group[]
 }
 
 enum ScenarioAction {
