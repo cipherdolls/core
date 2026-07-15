@@ -41,6 +41,7 @@ export const picturesRoutes = new Elysia({ prefix: '/pictures' })
       'ai-providers': 'aiProviderId',
       'stt-providers': 'sttProviderId',
       'tts-providers': 'ttsProviderId',
+      'groups': 'groupId',
     };
 
     const entityKey = entityKeyMap[params.entityType];
@@ -65,6 +66,7 @@ export const picturesRoutes = new Elysia({ prefix: '/pictures' })
       'ai-providers': 'aiProviderId',
       'stt-providers': 'sttProviderId',
       'tts-providers': 'ttsProviderId',
+      'groups': 'groupId',
     };
 
     const entityKey = entityKeyMap[params.entityType];
