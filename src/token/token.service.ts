@@ -53,6 +53,61 @@ export async function resetNonce(): Promise<void> {
   console.log(`[token] Nonce reset to ${chainNonce}`);
 }
 
+/** True for errors that mean our managed nonce drifted from the chain — nonce
+ *  too low/high, replacement underpriced, or Base's delegated-account
+ *  "gapped-nonce" rejection. */
+function isNonceError(err: any): boolean {
+  const msg = (err?.message ?? err?.info?.error?.message ?? String(err)).toLowerCase();
+  return /nonce/.test(msg) || err?.code === 'NONCE_EXPIRED' || err?.code === 'REPLACEMENT_UNDERPRICED';
+}
+
+/** Base rejects a 2nd unmined tx from an EIP-7702 delegated account. */
+function isInFlightLimit(err: any): boolean {
+  const msg = (err?.message ?? err?.info?.error?.message ?? String(err)).toLowerCase();
+  return /in-flight transaction limit/.test(msg);
+}
+
+/**
+ * Send a populated tx with the Redis-managed nonce. If it fails with a nonce
+ * error (drift from chain — e.g. after dropped/failed sends), resetNonce() to
+ * re-sync with the chain and run the send again once. A blind Redis increment
+ * on every attempt is what lets the nonce gap in the first place; this makes
+ * the send self-heal instead of the operator having to reset Redis by hand.
+ */
+async function sendManaged(txRequest: ethers.TransactionRequest, label: string): Promise<TransactionResponse> {
+  const s = getSigner();
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const nonce = await nextNonce();
+    let tx: TransactionResponse;
+    try {
+      const gasLimit = ((await s.estimateGas({ ...txRequest, nonce })) * 12n) / 10n;
+      tx = await s.sendTransaction({ ...txRequest, nonce, gasLimit });
+    } catch (err: any) {
+      lastErr = err;
+      console.error(`[token] ${label} send failed (nonce=${nonce}): ${err?.message ?? err}`);
+      // Nonce drift → re-sync and run again. "in-flight limit reached" means a
+      // previous tx is still unmined; reset+retry (this call is lock-serialized,
+      // so backing off and re-reading the chain nonce clears it).
+      if ((isNonceError(err) || isInFlightLimit(err)) && attempt < 2) {
+        await resetNonce();
+        if (isInFlightLimit(err)) await new Promise((r) => setTimeout(r, 2500));
+        continue;
+      }
+      throw err;
+    }
+    console.log(`[token] ${label} sent: ${tx.hash} nonce=${nonce}`);
+    // The master wallet is an EIP-7702 delegated account: Base rejects a second
+    // in-flight tx and any gapped nonce. Wait for this tx to mine before
+    // returning (and releasing the blockchain lock) so the next send starts
+    // from a clean chain nonce with nothing pending — and so callers that
+    // trigger a chain refresh afterwards see the effect already applied.
+    await tx.wait(1);
+    return tx;
+  }
+  throw lastErr;
+}
+
 export async function getNonce(address: string): Promise<bigint> {
   return getContract().nonces(address);
 }
@@ -78,7 +133,6 @@ export async function getBalance(address: string): Promise<Decimal> {
 export async function permit(tokenPermit: TokenPermit): Promise<string> {
   return withLock(BLOCKCHAIN_LOCK, async () => {
     const c = getContract();
-    const s = getSigner();
     const { owner, value, deadline, v, r, s: sig } = tokenPermit;
 
     console.log(`[token] Sending permit from ${owner} for spender ${MASTER_WALLET_ADDRESS}`);
@@ -87,12 +141,7 @@ export async function permit(tokenPermit: TokenPermit): Promise<string> {
       owner, MASTER_WALLET_ADDRESS, value, deadline, v, r, sig,
     );
 
-    const nonce = await nextNonce();
-    const gasLimit = ((await s.estimateGas(txRequest)) * 12n) / 10n;
-
-    const tx = await s.sendTransaction({ ...txRequest, nonce, gasLimit });
-    console.log(`[token] Permit tx sent: ${tx.hash} nonce=${nonce}`);
-
+    const tx = await sendManaged(txRequest, `permit ${owner}`);
     return tx.hash;
   });
 }
@@ -100,17 +149,11 @@ export async function permit(tokenPermit: TokenPermit): Promise<string> {
 export async function transferFromTo(from: string, to: string, amountTokens: string): Promise<TransactionResponse> {
   return withLock(BLOCKCHAIN_LOCK, async () => {
     const c = getContract();
-    const s = getSigner();
     const decimals = await c.decimals();
     const amount = ethers.parseUnits(amountTokens, decimals);
 
     const txReq = await c.transferFrom.populateTransaction(from, to, amount);
-    const nonce = await nextNonce();
-    const gasLimit = ((await s.estimateGas({ ...txReq, nonce })) * 12n) / 10n;
-
-    console.log(`[token] transferFrom ${from} → ${to} amount=${amountTokens} nonce=${nonce}`);
-    const tx = await s.sendTransaction({ ...txReq, nonce, gasLimit });
-
-    return tx;
+    console.log(`[token] transferFrom ${from} → ${to} amount=${amountTokens}`);
+    return sendManaged(txReq, `transferFrom ${from}→${to}`);
   });
 }
