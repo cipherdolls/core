@@ -220,6 +220,66 @@ export function describeDollBodies() {
       expect(res.status).toBe(401);
     });
 
+    // ─── Virtual doll bodies (appearance carrier for TTI) ──────
+
+    let virtualBodyId: string;
+
+    it('alice creates a virtual DollBody for her avatar Hana', async () => {
+      const { status, body } = await api('POST', '/doll-bodies', auth.alice.jwt, {
+        name: 'Hana virtual body',
+        description: 'Virtual body used for image generation',
+        avatarId: hanaAvatarId,
+        virtual: true,
+        appearance: 'young woman with long black hair, brown eyes, warm smile',
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('virtual', true);
+      expect(body).toHaveProperty('appearance', 'young woman with long black hair, brown eyes, warm smile');
+      virtualBodyId = body.id;
+    });
+
+    it('bob can NOT create a virtual DollBody for alice\'s avatar (403)', async () => {
+      const { status } = await api('POST', '/doll-bodies', auth.bob.jwt, {
+        name: 'intruder body',
+        description: 'test',
+        avatarId: hanaAvatarId,
+        virtual: true,
+      });
+      expect(status).toBe(403);
+    });
+
+    it('alice updates her virtual body appearance', async () => {
+      const { status, body } = await api('PATCH', `/doll-bodies/${virtualBodyId}`, auth.alice.jwt, {
+        appearance: 'young woman with long black hair, hazel eyes, gentle smile',
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('appearance', 'young woman with long black hair, hazel eyes, gentle smile');
+    });
+
+    it('bob can NOT update alice\'s virtual body (403)', async () => {
+      const { status } = await api('PATCH', `/doll-bodies/${virtualBodyId}`, auth.bob.jwt, {
+        appearance: 'hacked',
+      });
+      expect(status).toBe(403);
+    });
+
+    it('filters doll bodies by avatarId and virtual', async () => {
+      const { status, body } = await api('GET', `/doll-bodies?avatarId=${hanaAvatarId}&virtual=true`, auth.alice.jwt);
+      expect(status).toBe(200);
+      expect(body.data.length).toBe(1);
+      expect(body.data[0]).toHaveProperty('id', virtualBodyId);
+    });
+
+    it('bob can NOT delete alice\'s virtual body (403)', async () => {
+      const { status } = await api('DELETE', `/doll-bodies/${virtualBodyId}`, auth.bob.jwt);
+      expect(status).toBe(403);
+    });
+
+    it('alice deletes her virtual body', async () => {
+      const { status } = await api('DELETE', `/doll-bodies/${virtualBodyId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+    });
+
     // ─── Final check ───────────────────────────────────────────
 
     it('smartWig still exists with correct data', async () => {

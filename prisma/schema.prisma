@@ -125,6 +125,11 @@ model DollBody {
   updatedAt   DateTime   @updatedAt
   name        String
   description String
+  // Visual description (hair, eyes, skin, build, style) used as the TTI prompt input.
+  appearance  String?
+  // A virtual body exists only to carry appearance for image generation — no physical
+  // product. When a real doll body is connected it takes precedence over the virtual one.
+  virtual     Boolean    @default(false)
   picture     Picture?
   productUrl  String?
   published   Boolean    @default(false)
