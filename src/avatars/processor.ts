@@ -6,6 +6,7 @@ import { tts } from '../tts/tts.helper';
 import { redisConnection } from '../queue/connection';
 import { buildPrompt, resolveStyle } from '../tti/prompt';
 import { enqueueGroupCover } from '../tti/groupCover';
+import { enqueueScenarioPicture } from '../tti/scene';
 
 const ASSETS_PATH = process.env.ASSETS_PATH ?? '/app/uploads';
 
@@ -40,6 +41,7 @@ class AvatarsProcessor extends BaseProcessor<Avatar> {
       appearance: async () => {
         await this.enqueueTti(avatar, 'Appearance changed');
         await this.refreshGroupCovers(avatar);
+        await this.refreshSoleScenarioPictures(avatar);
       },
       ttiStyleId: () => this.enqueueTti(avatar, 'Style changed'),
     };
@@ -58,6 +60,23 @@ class AvatarsProcessor extends BaseProcessor<Avatar> {
       if (!claimed) continue;
       console.log(`[avatar] Appearance changed on ${avatar.id} — refreshing cover of group ${g.slug}`);
       await enqueueGroupCover(g.id).catch((e) => console.error(`[avatar] cover refresh failed for ${g.slug}:`, e.message));
+    }
+  }
+
+  /** Regenerate pictures of scenarios where this avatar is the SOLE avatar
+   *  (their picture shows the character in the scene). */
+  private async refreshSoleScenarioPictures(avatar: Avatar): Promise<void> {
+    const scenarios = await prisma.scenario.findMany({
+      where: { avatars: { some: { id: avatar.id } } },
+      select: { id: true, name: true, _count: { select: { avatars: true } } },
+    });
+    for (const s of scenarios) {
+      if (s._count.avatars !== 1) continue;
+      const stamp = new Date(avatar.updatedAt).getTime();
+      const claimed = await redisConnection.set(`scenario:tti:sole:${s.id}:${stamp}`, '1', 'EX', 300, 'NX');
+      if (!claimed) continue;
+      console.log(`[avatar] Appearance changed on ${avatar.id} — refreshing sole-avatar scenario ${s.name}`);
+      await enqueueScenarioPicture(s.id).catch((e) => console.error(`[avatar] scenario refresh failed for ${s.name}:`, e.message));
     }
   }
 

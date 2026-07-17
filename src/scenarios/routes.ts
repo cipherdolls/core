@@ -138,7 +138,9 @@ export const scenariosRoutes = new Elysia({ prefix: '/scenarios' })
 
   /* ── PATCH /scenarios/:id ────────────────────────────────────── */
   .patch('/:id', async ({ user, params, body, set }) => {
-    const item = await prisma.scenario.findUnique({ where: { id: params.id } });
+    // Include avatar ids so the processor can diff membership (m2m is invisible
+    // to the scalar field diff) and regenerate the picture on 1↔many changes.
+    const item = await prisma.scenario.findUnique({ where: { id: params.id }, include: { avatars: { select: { id: true } } } });
     if (!item) { set.status = 404; return { error: 'Not found' }; }
     if (item.userId !== user.userId && user.role !== 'ADMIN') { set.status = 403; return { error: 'Not authorized' }; }
 

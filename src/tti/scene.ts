@@ -1,5 +1,5 @@
 import { prisma, model } from '../db';
-import { buildScenePrompt } from './prompt';
+import { buildScenePrompt, buildSceneWithCharacter } from './prompt';
 
 const SCENE_SYSTEM_PROMPT =
   'You are an art director creating a UNIQUE establishing shot for a roleplay scenario. ' +
@@ -75,13 +75,23 @@ export async function enqueueScenarioPicture(scenarioId: string, scene?: string)
   const resolvedScene = scene ?? (await deriveScene(scenarioId));
   if (!resolvedScene) return null;
 
-  const scenario = await prisma.scenario.findUnique({ where: { id: scenarioId } });
+  const scenario = await prisma.scenario.findUnique({
+    where: { id: scenarioId },
+    include: { avatars: { select: { appearance: true } } },
+  });
   if (!scenario) return null;
 
-  console.log(`[tti/scene] Enqueueing picture for scenario ${scenario.name}: ${resolvedScene.slice(0, 80)}…`);
+  // A scenario with exactly one avatar shows that character in the scene;
+  // otherwise the scene is an empty establishing shot.
+  const soleAvatar = scenario.avatars.length === 1 ? scenario.avatars[0] : null;
+  const prompt = soleAvatar?.appearance
+    ? buildSceneWithCharacter(resolvedScene, soleAvatar.appearance)
+    : buildScenePrompt(resolvedScene);
+
+  console.log(`[tti/scene] Enqueueing ${soleAvatar?.appearance ? 'character' : 'scene'} picture for ${scenario.name}: ${resolvedScene.slice(0, 70)}…`);
   return model.ttiJob.create({
     data: {
-      prompt: buildScenePrompt(resolvedScene),
+      prompt,
       scenario: { connect: { id: scenario.id } },
       user: { connect: { id: scenario.userId } },
       // Scenes are wide establishing shots.

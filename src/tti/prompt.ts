@@ -57,3 +57,14 @@ const SCENE_TEMPLATE = process.env.TTI_SCENE_TEMPLATE
 export function buildScenePrompt(scene: string): string {
   return SCENE_TEMPLATE.replace('{scene}', scene);
 }
+
+/**
+ * Scenario picture WITH its character — used when a scenario has exactly one
+ * avatar. {subject} is the avatar appearance, placed in the derived {scene}.
+ */
+const SCENE_CHARACTER_TEMPLATE = process.env.TTI_SCENE_CHARACTER_TEMPLATE
+  ?? 'cinematic environmental portrait of {subject}, in {scene}, natural pose, atmospheric lighting, detailed background, depth of field, sharp focus, no text';
+
+export function buildSceneWithCharacter(scene: string, appearance: string): string {
+  return SCENE_CHARACTER_TEMPLATE.replace('{subject}', appearance).replace('{scene}', scene);
+}

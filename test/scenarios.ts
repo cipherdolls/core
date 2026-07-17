@@ -200,7 +200,32 @@ export function describeScenarios() {
       expect(status).toBe(200);
       expect(body).toHaveProperty('scenarioId', smallTalkScenarioId);
       expect(body.avatarId).toBeNull();
+      // No linked avatar → scene only (no character).
+      expect(body.prompt).toContain('establishing shot');
       expect(body.prompt).toContain('sunlit rooftop garden');
+    });
+
+    it('a scenario with exactly one avatar puts the character in the scene', async () => {
+      // Admin creates a published avatar with an appearance (bypasses the token
+      // gate), then links it as the scenario's only avatar.
+      const { body: voices } = await api('GET', '/tts-voices?limit=1', auth.admin.jwt);
+      const voiceId = voices.data[0].id;
+      const marker = 'long black hair, hazel eyes, teacher blazer';
+      const { body: avatar } = await api('POST', '/avatars', auth.admin.jwt, {
+        name: 'Scene Teacher', shortDesc: 'test', character: 'A calm teacher.',
+        appearance: `woman with ${marker}`, ttsVoiceId: voiceId, published: true,
+      });
+      await api('PATCH', `/scenarios/${smallTalkScenarioId}`, auth.alice.jwt, { avatarIds: [avatar.id] });
+
+      const { status, body } = await api('POST', '/tti-jobs', auth.alice.jwt, {
+        scenarioId: smallTalkScenarioId,
+        prompt: 'a quiet library reading room',
+      });
+      expect(status).toBe(200);
+      // Character composition, with the avatar appearance woven into the scene.
+      expect(body.prompt).toContain('environmental portrait');
+      expect(body.prompt).toContain(marker);
+      expect(body.prompt).toContain('quiet library reading room');
     });
 
     it('bob can NOT generate a picture for alice\'s scenario (403)', async () => {

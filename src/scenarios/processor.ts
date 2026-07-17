@@ -6,6 +6,8 @@ import { enqueueScenarioPicture } from '../tti/scene';
 
 const scalarFields = Object.values(Prisma.ScenarioScalarFieldEnum) as Prisma.ScenarioScalarFieldEnum[];
 
+type ScenarioWithAvatars = Scenario & { avatars?: { id: string }[] };
+
 class ScenariosProcessor extends BaseProcessor<Scenario> {
   constructor() {
     super('scenario', scalarFields);
@@ -25,6 +27,23 @@ class ScenariosProcessor extends BaseProcessor<Scenario> {
       // The scene comes from the systemMessage — regenerate when it changes.
       systemMessage: () => this.enqueuePicture(scenario, 'systemMessage changed'),
     };
+  }
+
+  // Avatar membership is many-to-many, invisible to the scalar diff. Regenerate
+  // when the avatar set changes — a scenario with exactly one avatar shows that
+  // character in the scene, so 1↔many transitions change the picture.
+  protected override async handleUpdated(job: Job): Promise<void> {
+    await super.handleUpdated(job);
+
+    const scenario = job.data.scenario as ScenarioWithAvatars;
+    const original = job.data.original as ScenarioWithAvatars | undefined;
+    if (!scenario?.avatars || !original?.avatars) return;
+
+    const now = scenario.avatars.map((a) => a.id).sort().join(',');
+    const before = original.avatars.map((a) => a.id).sort().join(',');
+    if (now !== before) {
+      await this.enqueuePicture(scenario, 'Avatars changed');
+    }
   }
 
   /**
