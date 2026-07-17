@@ -173,6 +173,52 @@ export function describeScenarios() {
       aliceUserProcessEvents = [];
     });
 
+    // ─── TTI: scenario picture from the derived scene ──────────────
+
+    it('creating a scenario derives a scene and enqueues a picture job', async () => {
+      // The processor calls the scenario's own chat model to distill a scene,
+      // then enqueues a tti job — poll until it appears.
+      let job: any = null;
+      const deadline = Date.now() + 40000;
+      while (Date.now() < deadline && !job) {
+        const { body } = await api('GET', `/tti-jobs?scenarioId=${smallTalkScenarioId}`, auth.alice.jwt);
+        job = (body.data ?? [])[0];
+        if (!job) await new Promise((r) => setTimeout(r, 2000));
+      }
+      expect(job).toBeTruthy();
+      // The scene is wrapped in the establishing-shot template.
+      expect(job.prompt).toContain('establishing shot');
+      expect(job.width).toBe(1216);
+      expect(job.height).toBe(832);
+    });
+
+    it('manual scenario tti job with an explicit scene prompt', async () => {
+      const { status, body } = await api('POST', '/tti-jobs', auth.alice.jwt, {
+        scenarioId: smallTalkScenarioId,
+        prompt: 'a sunlit rooftop garden overlooking the city at golden hour',
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('scenarioId', smallTalkScenarioId);
+      expect(body.avatarId).toBeNull();
+      expect(body.prompt).toContain('sunlit rooftop garden');
+    });
+
+    it('bob can NOT generate a picture for alice\'s scenario (403)', async () => {
+      const { status } = await api('POST', '/tti-jobs', auth.bob.jwt, {
+        scenarioId: smallTalkScenarioId,
+        prompt: 'hacked scene',
+      });
+      expect(status).toBe(403);
+    });
+
+    it('tti job with two targets is rejected (400)', async () => {
+      const { status } = await api('POST', '/tti-jobs', auth.alice.jwt, {
+        scenarioId: smallTalkScenarioId,
+        avatarId: '00000000-0000-0000-0000-000000000000',
+      });
+      expect(status).toBe(400);
+    });
+
     // ─── Get scenarios ─────────────────────────────────────────
 
     it('alice get the smallTalk Scenario', async () => {

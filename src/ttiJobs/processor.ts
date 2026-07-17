@@ -29,21 +29,26 @@ class TtiJobsProcessor extends BaseProcessor<TtiJob> {
       const fileId = await savePicture(file);
 
       let picture;
-      if (ttiJob.groupId) {
-        // Group cover is one-to-one — the new image replaces the old one.
-        const existing = await prisma.picture.findFirst({ where: { groupId: ttiJob.groupId } });
+      if (ttiJob.groupId || ttiJob.scenarioId) {
+        // Group covers and scenario pictures are one-to-one — replace the old.
+        const key = ttiJob.groupId ? 'groupId' : 'scenarioId';
+        const id = ttiJob.groupId ?? ttiJob.scenarioId!;
+        const existing = await prisma.picture.findFirst({ where: { [key]: id } });
         if (existing) await model.picture.delete({ where: { id: existing.id } });
-        picture = await model.picture.create({ data: { id: fileId, groupId: ttiJob.groupId } });
+        picture = await model.picture.create({ data: { id: fileId, [key]: id } });
       } else {
         // Into the avatar's gallery (pictures accumulate, newest is the face).
         picture = await model.picture.create({ data: { id: fileId, avatarId: ttiJob.avatarId } });
       }
 
+      const target = ttiJob.groupId ? `group ${ttiJob.groupId}`
+        : ttiJob.scenarioId ? `scenario ${ttiJob.scenarioId}`
+        : `avatar ${ttiJob.avatarId}`;
       await model.ttiJob.update({
         where: { id: ttiJob.id },
         data: { pictureId: picture.id, timeTakenMs: Date.now() - startTime },
       }, ttiJob);
-      console.log(`[ttiJob] Generated picture ${picture.id} for ${ttiJob.groupId ? `group ${ttiJob.groupId}` : `avatar ${ttiJob.avatarId}`} in ${Date.now() - startTime}ms`);
+      console.log(`[ttiJob] Generated picture ${picture.id} for ${target} in ${Date.now() - startTime}ms`);
     } catch (error: any) {
       console.error(`[ttiJob] Generation failed for ${ttiJob.id}:`, error.message);
       await model.ttiJob.update({

@@ -4,14 +4,17 @@ import { prisma, model } from '../db';
 import { jwtGuard } from '../auth/jwt';
 import { parsePagination, paginationMeta } from '../helpers/pagination';
 import { buildPrompt, groupSubject, resolveStyle } from '../tti/prompt';
+import { enqueueScenarioPicture, deriveScene } from '../tti/scene';
 
 /**
- * Text-to-image jobs. Two targets:
+ * Text-to-image jobs. Targets (exactly one of avatarId/groupId/scenarioId):
  * - Avatar: the avatar's `appearance` anchors the subject; the optional
  *   `prompt` adds scene/pose/outfit on top. Result appends to the gallery.
- * - Group: prompt-driven cover generation (groups have no appearance; the
- *   prompt is required). Result replaces the group picture.
- * The house style template (src/tti/prompt.ts) frames everything.
+ * - Group: cover derived from member appearances, or a `prompt`. Replaces the
+ *   group picture.
+ * - Scenario: the scene, distilled from the systemMessage by the scenario's own
+ *   chat model (or an explicit `prompt`). Replaces the scenario picture.
+ * The house style / scene template (src/tti/prompt.ts) frames everything.
  */
 export const ttiJobsRoutes = new Elysia({ prefix: '/tti-jobs' })
   .use(jwtGuard)
@@ -23,6 +26,7 @@ export const ttiJobsRoutes = new Elysia({ prefix: '/tti-jobs' })
       ...(user.role === 'ADMIN' ? {} : { userId: user.userId }),
       ...(query.avatarId ? { avatarId: query.avatarId } : {}),
       ...(query.groupId ? { groupId: query.groupId } : {}),
+      ...(query.scenarioId ? { scenarioId: query.scenarioId } : {}),
     };
     const [items, total] = await prisma.$transaction([
       prisma.ttiJob.findMany({ where, skip, take, orderBy: { createdAt: 'desc' } }),
@@ -43,9 +47,22 @@ export const ttiJobsRoutes = new Elysia({ prefix: '/tti-jobs' })
   .post(
     '/',
     async ({ user, body, set }) => {
-      if (!body.avatarId === !body.groupId) {
+      const targets = [body.avatarId, body.groupId, body.scenarioId].filter(Boolean);
+      if (targets.length !== 1) {
         set.status = 400;
-        return { error: 'Provide exactly one of avatarId or groupId' };
+        return { error: 'Provide exactly one of avatarId, groupId or scenarioId' };
+      }
+
+      if (body.scenarioId) {
+        // Scenario picture: explicit prompt is the scene, else derive it from
+        // the systemMessage via the scenario's own chat model.
+        const scenario = await prisma.scenario.findUnique({ where: { id: body.scenarioId } });
+        if (!scenario) { set.status = 404; return { error: 'Scenario not found' }; }
+        if (scenario.userId !== user.userId && user.role !== 'ADMIN') { set.status = 403; return { error: 'Not authorized' }; }
+
+        const scene = body.prompt ?? (await deriveScene(scenario.id));
+        if (!scene) { set.status = 502; return { error: 'Could not derive a scene from the scenario' }; }
+        return enqueueScenarioPicture(scenario.id, scene);
       }
 
       if (body.groupId) {
@@ -113,6 +130,7 @@ export const ttiJobsRoutes = new Elysia({ prefix: '/tti-jobs' })
       body: Body({
         avatarId: t.Optional(t.String({ pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' })),
         groupId: t.Optional(t.String({ pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' })),
+        scenarioId: t.Optional(t.String({ pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' })),
         prompt: t.Optional(t.String({ maxLength: 2000 })),
         ttiStyleId: t.Optional(t.String()),
         seed: t.Optional(t.Integer({ minimum: 0 })),

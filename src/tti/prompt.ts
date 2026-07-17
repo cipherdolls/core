@@ -45,3 +45,15 @@ export function groupSubject(appearances: string[]): string {
     ? appearances[0]
     : `a group of ${appearances.length} companions together: ` + appearances.map((a, i) => `(${i + 1}) ${a}`).join('; ');
 }
+
+/**
+ * Scene template for scenario pictures — an establishing shot of the setting,
+ * no people (the character's look lives on the avatar). {scene} is the visual
+ * description distilled from the scenario by its own chat model.
+ */
+const SCENE_TEMPLATE = process.env.TTI_SCENE_TEMPLATE
+  ?? 'cinematic establishing shot of {scene}, wide angle, atmospheric lighting, rich detailed environment, depth of field, no people, no text';
+
+export function buildScenePrompt(scene: string): string {
+  return SCENE_TEMPLATE.replace('{scene}', scene);
+}

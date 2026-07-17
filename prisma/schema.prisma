@@ -260,6 +260,7 @@ model Scenario {
   avatars          Avatar[]
   sponsorships     Sponsorship[]
   groups           Group[]
+  ttiJobs          TtiJob[]
 }
 
 enum ScenarioAction {
@@ -452,10 +453,12 @@ model TtiJob {
   // The generated picture (avatar: appended to the gallery; group: replaces
   // the cover). Exactly one of avatarId/groupId is set.
   pictureId   String?
-  avatar      Avatar?  @relation(fields: [avatarId], references: [id], onDelete: Cascade)
+  avatar      Avatar?   @relation(fields: [avatarId], references: [id], onDelete: Cascade)
   avatarId    String?
-  group       Group?   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  group       Group?    @relation(fields: [groupId], references: [id], onDelete: Cascade)
   groupId     String?
+  scenario    Scenario? @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  scenarioId  String?
   // Which style produced this image (null = env-default template).
   ttiStyle    TtiStyle? @relation(fields: [ttiStyleId], references: [id], onDelete: SetNull)
   ttiStyleId  String?
