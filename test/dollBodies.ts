@@ -398,6 +398,81 @@ export function describeDollBodies() {
       expect(del.status).toBe(200);
     });
 
+    // ─── TTI styles (admin-curated prompt templates) ───────────
+
+    let styleId: string;
+
+    it('alice can NOT create a tti style (403)', async () => {
+      const { status } = await api('POST', '/tti-styles', auth.alice.jwt, {
+        name: 'Hack', template: 'x {subject} y',
+      });
+      expect(status).toBe(403);
+    });
+
+    it('template without {subject} is rejected (400)', async () => {
+      const { status } = await api('POST', '/tti-styles', auth.admin.jwt, {
+        name: 'Broken', template: 'no placeholder here',
+      });
+      expect(status).toBe(400);
+    });
+
+    it('admin creates a published tti style with composition directives', async () => {
+      const { status, body } = await api('POST', '/tti-styles', auth.admin.jwt, {
+        name: 'Neon Test',
+        template: 'neon portrait of {subject}, head and shoulders centered, eyes at the vertical center of the frame',
+        width: 1024,
+        height: 1024,
+        published: true,
+        recommended: true,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('width', 1024);
+      styleId = body.id;
+    });
+
+    it('unpublished styles are hidden from non-admins', async () => {
+      const draft = await api('POST', '/tti-styles', auth.admin.jwt, {
+        name: 'Draft', template: 'draft {subject}',
+      });
+      expect(draft.status).toBe(200);
+      const list = await api('GET', '/tti-styles', auth.alice.jwt);
+      expect(list.body.data.some((s: any) => s.id === draft.body.id)).toBe(false);
+      expect(list.body.data.some((s: any) => s.id === styleId)).toBe(true);
+      await api('DELETE', `/tti-styles/${draft.body.id}`, auth.admin.jwt);
+    });
+
+    it('setting the body style regenerates with the style template and size', async () => {
+      const { status } = await api('PATCH', `/doll-bodies/${virtualBodyId}`, auth.alice.jwt, {
+        ttiStyleId: styleId,
+      });
+      expect(status).toBe(200);
+
+      let styleJob: any = null;
+      const deadline = Date.now() + 15000;
+      while (Date.now() < deadline && !styleJob) {
+        const { body } = await api('GET', `/tti-jobs?dollBodyId=${virtualBodyId}`, auth.alice.jwt);
+        styleJob = (body.data ?? []).find((j: any) => j.ttiStyleId === styleId);
+        if (!styleJob) await new Promise((r) => setTimeout(r, 1000));
+      }
+      expect(styleJob).toBeTruthy();
+      expect(styleJob.prompt).toContain('neon portrait of');
+      expect(styleJob.prompt).toContain('eyes at the vertical center');
+      expect(styleJob.width).toBe(1024);
+      expect(styleJob.height).toBe(1024);
+    });
+
+    it('manual tti job uses the body\'s style by default', async () => {
+      const { status, body } = await api('POST', '/tti-jobs', auth.alice.jwt, {
+        dollBodyId: virtualBodyId,
+        prompt: 'holding a coffee cup',
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('ttiStyleId', styleId);
+      expect(body.prompt).toContain('neon portrait of');
+      expect(body.prompt).toContain('holding a coffee cup');
+      expect(body.width).toBe(1024);
+    });
+
     it('bob can NOT delete alice\'s virtual body (403)', async () => {
       const { status } = await api('DELETE', `/doll-bodies/${virtualBodyId}`, auth.bob.jwt);
       expect(status).toBe(403);

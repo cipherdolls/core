@@ -18,6 +18,7 @@ export { transactionsProcessor } from '../transactions/processor';
 export { chatCompletionJobsProcessor } from '../chatCompletionJobs/processor';
 export { ttsJobsProcessor } from '../ttsJobs/processor';
 export { ttiJobsProcessor } from '../ttiJobs/processor';
+export { ttiStylesProcessor } from '../ttiStyles/processor';
 export { sponsorshipsProcessor } from '../sponsorships/processor';
 export { tokenPermitsProcessor } from '../tokenPermits/processor';
 export { embeddingJobsProcessor } from '../embeddingJobs/processor';

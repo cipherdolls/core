@@ -3,7 +3,7 @@ import { Prisma, type DollBody } from '@prisma/client';
 import { BaseProcessor } from '../queue/processor';
 import { model } from '../db';
 import { redisConnection } from '../queue/connection';
-import { buildPrompt } from '../tti/prompt';
+import { buildPrompt, resolveStyle } from '../tti/prompt';
 
 const scalarFields = Object.values(Prisma.DollBodyScalarFieldEnum) as Prisma.DollBodyScalarFieldEnum[];
 
@@ -28,11 +28,15 @@ class DollBodiesProcessor extends BaseProcessor<DollBody> {
     if (!claimed) return;
 
     console.log(`[dollBody] ${reason} on ${dollBody.id} — enqueueing TTI generation`);
+    const style = await resolveStyle(dollBody.ttiStyleId);
     await model.ttiJob.create({
       data: {
-        prompt: buildPrompt(dollBody.appearance),
+        prompt: buildPrompt(style.template, dollBody.appearance),
+        width: style.width,
+        height: style.height,
         dollBody: { connect: { id: dollBody.id } },
         user: { connect: { id: dollBody.userId } },
+        ...(style.id ? { ttiStyle: { connect: { id: style.id } } } : {}),
       },
     });
   }
@@ -46,6 +50,8 @@ class DollBodiesProcessor extends BaseProcessor<DollBody> {
     return {
       // Appearance changed → regenerate the body's picture.
       appearance: () => this.enqueueTti(dollBody, 'Appearance changed'),
+      // Style changed → regenerate in the new style.
+      ttiStyleId: () => this.enqueueTti(dollBody, 'Style changed'),
     };
   }
 }

@@ -19,6 +19,7 @@ import {
   chatCompletionJobsProcessor,
   ttsJobsProcessor,
   ttiJobsProcessor,
+  ttiStylesProcessor,
   embeddingJobsProcessor,
   sponsorshipsProcessor,
   tokenPermitsProcessor,
@@ -51,6 +52,7 @@ export function startWorkers() {
   registerWorker('chatCompletionJob', (job) => chatCompletionJobsProcessor.process(job));
   registerWorker('ttsJob', (job) => ttsJobsProcessor.process(job));
   registerWorker('ttiJob', (job) => ttiJobsProcessor.process(job));
+  registerWorker('ttiStyle', (job) => ttiStylesProcessor.process(job));
   registerWorker('embeddingJob', (job) => embeddingJobsProcessor.process(job));
   registerWorker('sponsorship', (job) => sponsorshipsProcessor.process(job));
   registerWorker('tokenPermit', (job) => tokenPermitsProcessor.process(job));

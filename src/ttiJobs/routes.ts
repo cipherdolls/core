@@ -3,7 +3,7 @@ import { Elysia, t } from 'elysia';
 import { prisma, model } from '../db';
 import { jwtGuard } from '../auth/jwt';
 import { parsePagination, paginationMeta } from '../helpers/pagination';
-import { buildPrompt } from '../tti/prompt';
+import { buildPrompt, resolveStyle } from '../tti/prompt';
 
 /**
  * Text-to-image jobs: generate a picture for a doll body. The doll body's
@@ -49,18 +49,21 @@ export const ttiJobsRoutes = new Elysia({ prefix: '/tti-jobs' })
         return { error: 'Doll body has no appearance — set one or pass a prompt' };
       }
 
+      // Style: explicit request > the body's chosen style > platform default.
+      const style = await resolveStyle(body.ttiStyleId ?? dollBody.ttiStyleId);
       const prompt = dollBody.appearance
-        ? buildPrompt(dollBody.appearance, body.prompt)
-        : buildPrompt(body.prompt!);
+        ? buildPrompt(style.template, dollBody.appearance, body.prompt)
+        : buildPrompt(style.template, body.prompt!);
 
       return model.ttiJob.create({
         data: {
           prompt,
           dollBody: { connect: { id: dollBody.id } },
           user: { connect: { id: user.userId } },
+          ...(style.id ? { ttiStyle: { connect: { id: style.id } } } : {}),
           ...(body.seed !== undefined ? { seed: body.seed } : {}),
-          ...(body.width !== undefined ? { width: body.width } : {}),
-          ...(body.height !== undefined ? { height: body.height } : {}),
+          width: body.width ?? style.width,
+          height: body.height ?? style.height,
         },
       });
     },
@@ -68,6 +71,7 @@ export const ttiJobsRoutes = new Elysia({ prefix: '/tti-jobs' })
       body: Body({
         dollBodyId: t.String({ pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' }),
         prompt: t.Optional(t.String({ maxLength: 2000 })),
+        ttiStyleId: t.Optional(t.String()),
         seed: t.Optional(t.Integer({ minimum: 0 })),
         width: t.Optional(t.Integer({ minimum: 256, maximum: 2048, multipleOf: 16 })),
         height: t.Optional(t.Integer({ minimum: 256, maximum: 2048, multipleOf: 16 })),

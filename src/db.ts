@@ -25,6 +25,7 @@ export const model = {
   tokenPermit: createCudService('tokenPermit', prisma.tokenPermit),
   transaction: createCudService('transaction', prisma.transaction),
   ttiJob: createCudService('ttiJob', prisma.ttiJob),
+  ttiStyle: createCudService('ttiStyle', prisma.ttiStyle),
   ttsJob: createCudService('ttsJob', prisma.ttsJob),
   ttsProvider: createCudService('ttsProvider', prisma.ttsProvider),
   ttsVoice: createCudService('ttsVoice', prisma.ttsVoice),

@@ -62,6 +62,7 @@ export const dollBodiesRoutes = new Elysia({ prefix: '/doll-bodies' })
           user: { connect: { id: avatar.userId } },
           ...(body.appearance !== undefined ? { appearance: body.appearance } : {}),
           ...(body.virtual !== undefined ? { virtual: body.virtual } : {}),
+          ...(body.ttiStyleId !== undefined ? { ttiStyle: { connect: { id: body.ttiStyleId } } } : {}),
           ...(body.productUrl !== undefined ? { productUrl: body.productUrl } : {}),
           ...(body.published !== undefined ? { published: body.published } : {}),
         },
@@ -74,6 +75,7 @@ export const dollBodiesRoutes = new Elysia({ prefix: '/doll-bodies' })
         avatarId: t.String({ pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' }),
         appearance: t.Optional(t.String()),
         virtual: t.Optional(t.Boolean()),
+        ttiStyleId: t.Optional(t.String()),
         productUrl: t.Optional(t.String()),
         published: t.Optional(t.Boolean()),
       }),
@@ -99,6 +101,9 @@ export const dollBodiesRoutes = new Elysia({ prefix: '/doll-bodies' })
           ...(body.description !== undefined ? { description: body.description } : {}),
           ...(body.appearance !== undefined ? { appearance: body.appearance } : {}),
           ...(body.avatarId !== undefined ? { avatar: { connect: { id: body.avatarId } } } : {}),
+          ...(body.ttiStyleId !== undefined
+            ? { ttiStyle: body.ttiStyleId ? { connect: { id: body.ttiStyleId } } : { disconnect: true } }
+            : {}),
           ...(body.productUrl !== undefined ? { productUrl: body.productUrl } : {}),
           ...(body.published !== undefined ? { published: body.published } : {}),
         },
@@ -110,6 +115,7 @@ export const dollBodiesRoutes = new Elysia({ prefix: '/doll-bodies' })
         description: t.Optional(t.String()),
         appearance: t.Optional(t.String()),
         avatarId: t.Optional(t.String()),
+        ttiStyleId: t.Optional(t.Nullable(t.String())),
         productUrl: t.Optional(t.String()),
         published: t.Optional(t.Boolean()),
       }),
