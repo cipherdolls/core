@@ -5,6 +5,7 @@ import { prisma, model } from '../db';
 import { tts } from '../tts/tts.helper';
 import { redisConnection } from '../queue/connection';
 import { buildPrompt, resolveStyle } from '../tti/prompt';
+import { enqueueGroupCover } from '../tti/groupCover';
 
 const ASSETS_PATH = process.env.ASSETS_PATH ?? '/app/uploads';
 
@@ -33,10 +34,31 @@ class AvatarsProcessor extends BaseProcessor<Avatar> {
         await this.generateIntroductionAudio(avatar);
       },
       // Appearance or style changed → regenerate the avatar picture. The new
-      // image lands in the gallery as the newest picture (the face).
-      appearance: () => this.enqueueTti(avatar, 'Appearance changed'),
+      // image lands in the gallery as the newest picture (the face). An
+      // appearance change also refreshes the covers of groups the avatar is in
+      // (covers are composed from member appearances).
+      appearance: async () => {
+        await this.enqueueTti(avatar, 'Appearance changed');
+        await this.refreshGroupCovers(avatar);
+      },
       ttiStyleId: () => this.enqueueTti(avatar, 'Style changed'),
     };
+  }
+
+  /** Regenerate the covers of all groups this avatar belongs to. */
+  private async refreshGroupCovers(avatar: Avatar): Promise<void> {
+    const groups = await prisma.group.findMany({
+      where: { avatars: { some: { id: avatar.id } } },
+      select: { id: true, slug: true },
+    });
+    for (const g of groups) {
+      // Claimed per group + avatar update stamp so 2 worker replicas enqueue once.
+      const stamp = new Date(avatar.updatedAt).getTime();
+      const claimed = await redisConnection.set(`group:cover:${g.id}:${avatar.id}:${stamp}`, '1', 'EX', 300, 'NX');
+      if (!claimed) continue;
+      console.log(`[avatar] Appearance changed on ${avatar.id} — refreshing cover of group ${g.slug}`);
+      await enqueueGroupCover(g.id).catch((e) => console.error(`[avatar] cover refresh failed for ${g.slug}:`, e.message));
+    }
   }
 
   /**

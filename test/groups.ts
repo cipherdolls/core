@@ -272,6 +272,27 @@ export function describeGroups() {
       expect(after).toBeGreaterThan(before);
     });
 
+    it('changing a member avatar\'s appearance refreshes the group cover', async () => {
+      const { body: group } = await api('GET', `/groups/${teachersGroupId}`, auth.alice.jwt);
+      const member = group.avatars[0];
+      const marker = 'emerald bow tie and round spectacles';
+
+      const { status } = await api('PATCH', `/avatars/${member.id}`, auth.alice.jwt, {
+        appearance: `distinguished teacher with ${marker}`,
+      });
+      expect(status).toBe(200);
+
+      // The avatar processor refreshes the covers of groups the avatar is in.
+      let coverJob: any = null;
+      const deadline = Date.now() + 15000;
+      while (Date.now() < deadline && !coverJob) {
+        const { body } = await api('GET', `/tti-jobs?groupId=${teachersGroupId}`, auth.alice.jwt);
+        coverJob = (body.data ?? []).find((j: any) => j.prompt.includes(marker));
+        if (!coverJob) await new Promise((r) => setTimeout(r, 1000));
+      }
+      expect(coverJob).toBeTruthy();
+    });
+
     it('bob can NOT generate a cover for alice\'s group (403)', async () => {
       const { status } = await api('POST', '/tti-jobs', auth.bob.jwt, {
         groupId: teachersGroupId,
