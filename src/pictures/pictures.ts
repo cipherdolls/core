@@ -34,7 +34,8 @@ export async function servePicture(
   format: 'webp' | 'jpeg',
 ): Promise<Response> {
   const ext = format === 'jpeg' ? 'jpg' : 'webp';
-  const cachedPath = `${UPLOADS_DIR}/${pictureId}-${x}-${y}.${ext}`;
+  // "-a" = attention-cropped; distinct from the old center-cropped cache files.
+  const cachedPath = `${UPLOADS_DIR}/${pictureId}-${x}-${y}-a.${ext}`;
   const sourcePath = `${UPLOADS_DIR}/${pictureId}-2000.webp`;
 
   if (!fs.existsSync(sourcePath)) {
@@ -45,7 +46,9 @@ export async function servePicture(
   }
 
   if (!fs.existsSync(cachedPath)) {
-    const pipeline = sharp(sourcePath).resize(x, y);
+    // Attention strategy crops toward the most salient region (faces) instead of
+    // the geometric center — portraits keep the face in every aspect ratio.
+    const pipeline = sharp(sourcePath).resize(x, y, { fit: 'cover', position: sharp.strategy.attention });
     if (format === 'jpeg') {
       await pipeline.jpeg({ quality: 80 }).toFile(cachedPath);
     } else {
