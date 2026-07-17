@@ -38,3 +38,10 @@ export function buildPrompt(template: string, appearance: string, extra?: string
   const subject = extra ? `${appearance}, ${extra}` : appearance;
   return template.replace('{subject}', subject);
 }
+
+/** Group-portrait subject from the members' appearances. */
+export function groupSubject(appearances: string[]): string {
+  return appearances.length === 1
+    ? appearances[0]
+    : `a group of ${appearances.length} companions together: ` + appearances.map((a, i) => `(${i + 1}) ${a}`).join('; ');
+}

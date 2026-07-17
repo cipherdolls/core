@@ -3,6 +3,7 @@ import { Elysia, t } from 'elysia';
 import { prisma, model } from '../db';
 import { jwtGuard, optionalJwtGuard } from '../auth/jwt';
 import { parsePagination, paginationMeta } from '../helpers/pagination';
+import { enqueueGroupCover } from '../tti/groupCover';
 
 /** Non-admins may only group published content or their own. Returns an error string or null. */
 async function validateMembers(user: { userId: string; role: string }, avatarIds?: string[], scenarioIds?: string[]): Promise<string | null> {
@@ -110,6 +111,8 @@ export const groupsRoutes = new Elysia({ prefix: '/groups' })
       },
       include: groupInclude,
     });
+    // Members set at creation → generate the cover from their appearances.
+    if (avatarIds?.length) enqueueGroupCover(item.id).catch((e) => console.error('[groups] cover enqueue failed:', e.message));
     return item;
   }, {
     body: Body({
@@ -149,6 +152,8 @@ export const groupsRoutes = new Elysia({ prefix: '/groups' })
       },
       include: groupInclude,
     }, item);
+    // Membership changed → regenerate the cover from the new lineup.
+    if (avatarIds) enqueueGroupCover(item.id).catch((e) => console.error('[groups] cover enqueue failed:', e.message));
     return updated;
   }, {
     body: Body({

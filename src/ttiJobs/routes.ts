@@ -3,7 +3,7 @@ import { Elysia, t } from 'elysia';
 import { prisma, model } from '../db';
 import { jwtGuard } from '../auth/jwt';
 import { parsePagination, paginationMeta } from '../helpers/pagination';
-import { buildPrompt, resolveStyle } from '../tti/prompt';
+import { buildPrompt, groupSubject, resolveStyle } from '../tti/prompt';
 
 /**
  * Text-to-image jobs. Two targets:
@@ -65,9 +65,7 @@ export const ttiJobsRoutes = new Elysia({ prefix: '/tti-jobs' })
             set.status = 400;
             return { error: 'Group has no avatars with an appearance — pass a prompt' };
           }
-          subject = appearances.length === 1
-            ? appearances[0]
-            : `a group of ${appearances.length} companions together: ` + appearances.map((a, i) => `(${i + 1}) ${a}`).join('; ');
+          subject = groupSubject(appearances);
         }
 
         const style = await resolveStyle(body.ttiStyleId);
