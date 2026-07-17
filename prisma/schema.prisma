@@ -78,8 +78,9 @@ model Picture {
   // entities stay one-to-one (upload replaces).
   dollBody      DollBody?    @relation(fields: [dollBodyId], references: [id], onDelete: Cascade)
   dollBodyId    String?
+  // Avatars keep a gallery (1:n) — each TTI generation adds a picture.
   avatar        Avatar?      @relation(fields: [avatarId], references: [id], onDelete: Cascade)
-  avatarId      String?      @unique
+  avatarId      String?
   scenario      Scenario?    @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
   scenarioId    String?      @unique
   sttProvider   SttProvider? @relation(fields: [sttProviderId], references: [id], onDelete: Cascade)
@@ -129,27 +130,18 @@ model DollBody {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
   name        String
+  // Hardware information only — the character's look lives on the avatar.
   description String
-  // Visual description (hair, eyes, skin, build, style) used as the TTI prompt input.
-  appearance  String?
-  // A virtual body exists only to carry appearance for image generation — no physical
-  // product. When a real doll body is connected it takes precedence over the virtual one.
-  virtual     Boolean    @default(false)
+  // Real photos of the physical body (gallery, newest first).
   pictures    Picture[]
-  // Image style for generations (null = the platform default style).
-  ttiStyle    TtiStyle?  @relation(fields: [ttiStyleId], references: [id], onDelete: SetNull)
-  ttiStyleId  String?
   productUrl  String?
   published   Boolean    @default(false)
   avatar      Avatar     @relation(fields: [avatarId], references: [id])
   avatarId    String
-  // Owner — always the avatar's creator (set server-side, even when an admin
-  // creates the body), so creators manage their avatars' bodies.
   user        User       @relation(fields: [userId], references: [id])
   userId      String
   dolls       Doll[]
   firmwares   Firmware[]
-  ttiJobs     TtiJob[]
 }
 
 model Firmware {
@@ -173,7 +165,8 @@ model Avatar {
   id        String       @id @default(uuid())
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
-  picture   Picture?
+  // AI-generated pictures (gallery, newest first = the avatar's face).
+  pictures  Picture[]
   audio     Audio?
   name      String
   shortDesc String
@@ -182,6 +175,12 @@ model Avatar {
   error     String?
   language  LanguageCode @default(en)
   character String
+  // Visual description (hair, eyes, skin, build, style) used as the TTI prompt
+  // input; changing it regenerates the avatar picture.
+  appearance String?
+  // Image style for generations (null = the platform default style).
+  ttiStyle   TtiStyle? @relation(fields: [ttiStyleId], references: [id], onDelete: SetNull)
+  ttiStyleId String?
   free        Boolean      @default(false)
   published   Boolean      @default(false)
   recommended Boolean      @default(false)
@@ -196,6 +195,7 @@ model Avatar {
   scenarios  Scenario[]
   fillerWords FillerWord[]
   groups     Group[]
+  ttiJobs    TtiJob[]
 }
 
 model Group {
@@ -432,7 +432,7 @@ model TtiStyle {
   recommended Boolean @default(false)
   user      User     @relation(fields: [userId], references: [id])
   userId    String
-  dollBodies DollBody[]
+  avatars    Avatar[]
   ttiJobs    TtiJob[]
 }
 
@@ -440,7 +440,7 @@ model TtiJob {
   id          String   @id @default(uuid())
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  // Final prompt sent to the image model (style template + body appearance + extras).
+  // Final prompt sent to the image model (style template + avatar appearance + extras).
   prompt      String
   seed        Int?
   width       Int      @default(832)
@@ -448,10 +448,10 @@ model TtiJob {
   usdCost     Decimal  @default(0) @db.Decimal(19, 9)
   timeTakenMs Int?
   error       String?
-  // The generated picture (attached to the doll body's gallery).
+  // The generated picture (attached to the avatar's gallery).
   pictureId   String?
-  dollBody    DollBody @relation(fields: [dollBodyId], references: [id], onDelete: Cascade)
-  dollBodyId  String
+  avatar      Avatar   @relation(fields: [avatarId], references: [id], onDelete: Cascade)
+  avatarId    String
   // Which style produced this image (null = env-default template).
   ttiStyle    TtiStyle? @relation(fields: [ttiStyleId], references: [id], onDelete: SetNull)
   ttiStyleId  String?

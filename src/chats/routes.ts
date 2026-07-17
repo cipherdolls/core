@@ -6,13 +6,13 @@ import { parsePagination, paginationMeta } from '../helpers/pagination';
 import { redisConnection } from '../queue/connection';
 
 const chatListInclude = {
-  avatar: { include: { picture: true } },
+  avatar: { include: { pictures: { orderBy: { createdAt: 'desc' as const } } } },
   scenario: { include: { picture: true } },
   _count: { select: { messages: true, chatCompletionJobs: true } },
 };
 
 const chatDetailInclude = {
-  avatar: { include: { picture: true } },
+  avatar: { include: { pictures: { orderBy: { createdAt: 'desc' as const } } } },
   scenario: {
     include: {
       picture: true,

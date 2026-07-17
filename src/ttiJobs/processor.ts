@@ -1,7 +1,7 @@
 import type { Job } from 'bullmq';
 import { Prisma, type TtiJob } from '@prisma/client';
 import { BaseProcessor } from '../queue/processor';
-import { prisma, model } from '../db';
+import { model } from '../db';
 import { generateImage } from '../tti/comfyui';
 import { savePicture } from '../pictures/pictures';
 
@@ -25,18 +25,18 @@ class TtiJobsProcessor extends BaseProcessor<TtiJob> {
         height: ttiJob.height,
       });
 
-      // Into the doll body's gallery (doll-body pictures accumulate, newest is the cover).
+      // Into the avatar's gallery (pictures accumulate, newest is the face).
       const file = new File([new Uint8Array(png)], 'generated.png', { type: 'image/png' });
       const fileId = await savePicture(file);
       const picture = await model.picture.create({
-        data: { id: fileId, dollBodyId: ttiJob.dollBodyId },
+        data: { id: fileId, avatarId: ttiJob.avatarId },
       });
 
       await model.ttiJob.update({
         where: { id: ttiJob.id },
         data: { pictureId: picture.id, timeTakenMs: Date.now() - startTime },
       }, ttiJob);
-      console.log(`[ttiJob] Generated picture ${picture.id} for dollBody ${ttiJob.dollBodyId} in ${Date.now() - startTime}ms`);
+      console.log(`[ttiJob] Generated picture ${picture.id} for avatar ${ttiJob.avatarId} in ${Date.now() - startTime}ms`);
     } catch (error: any) {
       console.error(`[ttiJob] Generation failed for ${ttiJob.id}:`, error.message);
       await model.ttiJob.update({

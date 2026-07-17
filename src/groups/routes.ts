@@ -29,7 +29,7 @@ const groupInclude = {
 
 const groupDetailInclude = {
   picture: true,
-  avatars: { include: { picture: true, ttsVoice: true } },
+  avatars: { include: { pictures: { orderBy: { createdAt: 'desc' as const } }, ttsVoice: true } },
   scenarios: { include: { picture: true } },
   _count: { select: { avatars: true, scenarios: true } },
 };

@@ -10,7 +10,7 @@ const scenarioInclude = {
   embeddingModel: { include: { aiProvider: true } },
   reasoningModel: { include: { aiProvider: true } },
   picture: true,
-  avatars: { include: { picture: true } },
+  avatars: { include: { pictures: { orderBy: { createdAt: 'desc' as const } } } },
 };
 
 export const scenariosRoutes = new Elysia({ prefix: '/scenarios' })
@@ -73,7 +73,7 @@ export const scenariosRoutes = new Elysia({ prefix: '/scenarios' })
             ...(callerId ? [{ userId: callerId }] : []),
           ],
         },
-        include: { picture: true },
+        include: { pictures: { orderBy: { createdAt: 'desc' as const } } },
         orderBy: { name: 'asc' as const },
       },
     };

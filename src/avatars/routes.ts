@@ -9,7 +9,7 @@ const avatarInclude = {
   ttsVoice: true,
   scenarios: { include: { picture: true } },
   _count: { select: { chats: true } },
-  picture: true,
+  pictures: { orderBy: { createdAt: 'desc' as const } },
   audio: true,
 };
 
@@ -97,7 +97,7 @@ export const avatarsRoutes = new Elysia({ prefix: '/avatars' })
       return { error: 'Insufficient spendable tokens' };
     }
 
-    const { recommended, ttsVoiceId, scenarioIds, published, ...rest } = body;
+    const { recommended, ttsVoiceId, scenarioIds, published, ttiStyleId, ...rest } = body;
 
     // Enforce publication rule: all assigned scenarios must be published
     if (published === true && Array.isArray(scenarioIds) && scenarioIds.length > 0) {
@@ -121,6 +121,7 @@ export const avatarsRoutes = new Elysia({ prefix: '/avatars' })
         ...(user.role === 'ADMIN' && recommended !== undefined ? { recommended } : {}),
         user: { connect: { id: user.userId } },
         ttsVoice: { connect: { id: ttsVoiceId } },
+        ...(ttiStyleId ? { ttiStyle: { connect: { id: ttiStyleId } } } : {}),
         ...(scenarioIds ? { scenarios: { connect: scenarioIds.map((id: string) => ({ id })) } } : {}),
       },
       include: avatarInclude,
@@ -131,6 +132,8 @@ export const avatarsRoutes = new Elysia({ prefix: '/avatars' })
       name: t.String(),
       shortDesc: t.String(),
       character: t.String(),
+      appearance: t.Optional(t.String()),
+      ttiStyleId: t.Optional(t.String()),
       ttsVoiceId: t.String(),
       introduction: t.Optional(t.String()),
       language: t.Optional(t.String()),
@@ -150,7 +153,7 @@ export const avatarsRoutes = new Elysia({ prefix: '/avatars' })
     // Non-admin cannot set recommended
     if (body.recommended !== undefined && user.role !== 'ADMIN') { set.status = 403; return { error: 'Only admins can set recommended on avatars' }; }
 
-    const { ttsVoiceId, recommended, scenarioIds, published, ...rest } = body;
+    const { ttsVoiceId, recommended, scenarioIds, published, ttiStyleId, ...rest } = body;
 
     // Determine final scenario IDs for publish validation
     const finalScenarioIds = scenarioIds ?? (item as any).scenarios?.map((s: any) => s.id) ?? [];
@@ -173,6 +176,9 @@ export const avatarsRoutes = new Elysia({ prefix: '/avatars' })
         ...(published !== undefined ? { published } : {}),
         ...(user.role === 'ADMIN' && recommended !== undefined ? { recommended } : {}),
         ...(ttsVoiceId ? { ttsVoice: { connect: { id: ttsVoiceId } } } : {}),
+        ...(ttiStyleId !== undefined
+          ? { ttiStyle: ttiStyleId ? { connect: { id: ttiStyleId } } : { disconnect: true } }
+          : {}),
         ...(scenarioIds ? { scenarios: { set: scenarioIds.map((id: string) => ({ id })) } } : {}),
       },
       include: avatarInclude,
@@ -183,6 +189,8 @@ export const avatarsRoutes = new Elysia({ prefix: '/avatars' })
       name: t.Optional(t.String()),
       shortDesc: t.Optional(t.String()),
       character: t.Optional(t.String()),
+      appearance: t.Optional(t.String()),
+      ttiStyleId: t.Optional(t.Nullable(t.String())),
       ttsVoiceId: t.Optional(t.String()),
       introduction: t.Optional(t.String()),
       language: t.Optional(t.String()),

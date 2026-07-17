@@ -5,19 +5,11 @@ import { jwtGuard } from '../auth/jwt';
 import { savePicture, servePicture } from './pictures';
 
 /**
- * Resolve the picture to serve for an entity. Avatars prefer their virtual
- * doll body's newest picture (the body carries the character's look; the
- * gallery cover is the face shown everywhere) and fall back to the avatar's
- * own uploaded picture. Everything else serves its own picture, newest first.
+ * Resolve the picture to serve for an entity — newest first, so gallery
+ * entities (avatars: generated images; doll bodies: real photos) show their
+ * latest picture as the cover.
  */
 async function findEntityPicture(entityKey: string, entityId: string) {
-  if (entityKey === 'avatarId') {
-    const bodyCover = await prisma.picture.findFirst({
-      where: { dollBody: { avatarId: entityId, virtual: true } },
-      orderBy: { createdAt: 'desc' },
-    });
-    if (bodyCover) return bodyCover;
-  }
   return prisma.picture.findFirst({ where: { [entityKey]: entityId }, orderBy: { createdAt: 'desc' } });
 }
 
@@ -116,9 +108,10 @@ export const picturesRoutes = new Elysia({ prefix: '/pictures' })
     const entityKey = provided[0];
     const entityId = (body as any)[entityKey];
 
-    // Delete existing picture for this entity (one-to-one). Doll bodies are the
-    // exception: they keep a gallery, so uploads append instead of replacing.
-    if (entityKey !== 'dollBodyId') {
+    // Delete existing picture for this entity (one-to-one). Gallery entities are
+    // the exception — doll bodies (real photos) and avatars (generated images)
+    // accumulate pictures, so uploads append instead of replacing.
+    if (entityKey !== 'dollBodyId' && entityKey !== 'avatarId') {
       const existing = await prisma.picture.findFirst({ where: { [entityKey]: entityId } });
       if (existing) {
         await model.picture.delete({ where: { id: existing.id } });

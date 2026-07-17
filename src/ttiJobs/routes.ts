@@ -6,12 +6,11 @@ import { parsePagination, paginationMeta } from '../helpers/pagination';
 import { buildPrompt, resolveStyle } from '../tti/prompt';
 
 /**
- * Text-to-image jobs: generate a picture for a doll body. The doll body's
- * `appearance` (virtual body, or the real one when connected) anchors the
- * subject; the optional `prompt` adds scene/pose/outfit on top; the house
- * style template (src/tti/prompt.ts) frames everything.
+ * Text-to-image jobs: generate a picture for an avatar. The avatar's
+ * `appearance` anchors the subject; the optional `prompt` adds scene/pose/
+ * outfit on top; the house style template (src/tti/prompt.ts) frames
+ * everything.
  */
-
 export const ttiJobsRoutes = new Elysia({ prefix: '/tti-jobs' })
   .use(jwtGuard)
 
@@ -20,7 +19,7 @@ export const ttiJobsRoutes = new Elysia({ prefix: '/tti-jobs' })
     const { pageNum, take, skip } = parsePagination(query.page, query.limit);
     const where = {
       ...(user.role === 'ADMIN' ? {} : { userId: user.userId }),
-      ...(query.dollBodyId ? { dollBodyId: query.dollBodyId } : {}),
+      ...(query.avatarId ? { avatarId: query.avatarId } : {}),
     };
     const [items, total] = await prisma.$transaction([
       prisma.ttiJob.findMany({ where, skip, take, orderBy: { createdAt: 'desc' } }),
@@ -37,28 +36,28 @@ export const ttiJobsRoutes = new Elysia({ prefix: '/tti-jobs' })
     return item;
   })
 
-  /* ── POST /tti-jobs ── generate a picture for a doll body ─────── */
+  /* ── POST /tti-jobs ── generate a picture for an avatar ────────── */
   .post(
     '/',
     async ({ user, body, set }) => {
-      const dollBody = await prisma.dollBody.findUnique({ where: { id: body.dollBodyId } });
-      if (!dollBody) { set.status = 404; return { error: 'Doll body not found' }; }
-      if (dollBody.userId !== user.userId && user.role !== 'ADMIN') { set.status = 403; return { error: 'Not authorized' }; }
-      if (!dollBody.appearance && !body.prompt) {
+      const avatar = await prisma.avatar.findUnique({ where: { id: body.avatarId } });
+      if (!avatar) { set.status = 404; return { error: 'Avatar not found' }; }
+      if (avatar.userId !== user.userId && user.role !== 'ADMIN') { set.status = 403; return { error: 'Not authorized' }; }
+      if (!avatar.appearance && !body.prompt) {
         set.status = 400;
-        return { error: 'Doll body has no appearance — set one or pass a prompt' };
+        return { error: 'Avatar has no appearance — set one or pass a prompt' };
       }
 
-      // Style: explicit request > the body's chosen style > platform default.
-      const style = await resolveStyle(body.ttiStyleId ?? dollBody.ttiStyleId);
-      const prompt = dollBody.appearance
-        ? buildPrompt(style.template, dollBody.appearance, body.prompt)
+      // Style: explicit request > the avatar's chosen style > platform default.
+      const style = await resolveStyle(body.ttiStyleId ?? avatar.ttiStyleId);
+      const prompt = avatar.appearance
+        ? buildPrompt(style.template, avatar.appearance, body.prompt)
         : buildPrompt(style.template, body.prompt!);
 
       return model.ttiJob.create({
         data: {
           prompt,
-          dollBody: { connect: { id: dollBody.id } },
+          avatar: { connect: { id: avatar.id } },
           user: { connect: { id: user.userId } },
           ...(style.id ? { ttiStyle: { connect: { id: style.id } } } : {}),
           ...(body.seed !== undefined ? { seed: body.seed } : {}),
@@ -69,7 +68,7 @@ export const ttiJobsRoutes = new Elysia({ prefix: '/tti-jobs' })
     },
     {
       body: Body({
-        dollBodyId: t.String({ pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' }),
+        avatarId: t.String({ pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' }),
         prompt: t.Optional(t.String({ maxLength: 2000 })),
         ttiStyleId: t.Optional(t.String()),
         seed: t.Optional(t.Integer({ minimum: 0 })),
