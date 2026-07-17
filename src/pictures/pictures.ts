@@ -34,8 +34,8 @@ export async function servePicture(
   format: 'webp' | 'jpeg',
 ): Promise<Response> {
   const ext = format === 'jpeg' ? 'jpg' : 'webp';
-  // "-a" = attention-cropped; distinct from the old center-cropped cache files.
-  const cachedPath = `${UPLOADS_DIR}/${pictureId}-${x}-${y}-a.${ext}`;
+  // "-b" = top-biased crop; distinct from older center/attention cache files.
+  const cachedPath = `${UPLOADS_DIR}/${pictureId}-${x}-${y}-b.${ext}`;
   const sourcePath = `${UPLOADS_DIR}/${pictureId}-2000.webp`;
 
   if (!fs.existsSync(sourcePath)) {
@@ -46,9 +46,21 @@ export async function servePicture(
   }
 
   if (!fs.existsSync(cachedPath)) {
-    // Attention strategy crops toward the most salient region (faces) instead of
-    // the geometric center — portraits keep the face in every aspect ratio.
-    const pipeline = sharp(sourcePath).resize(x, y, { fit: 'cover', position: sharp.strategy.attention });
+    // Top-biased cover crop. Faces sit in the upper part of portrait images, so a
+    // centered crop to a wider aspect cuts them off — and saliency ("attention")
+    // gets dragged to high-contrast clothing on stylized art. Deterministic rule:
+    // center horizontally, but never start the crop below ~15% of the height.
+    const meta = await sharp(sourcePath).metadata();
+    const srcW = meta.width ?? x;
+    const srcH = meta.height ?? y;
+    const scale = Math.max(x / srcW, y / srcH);
+    const scaledW = Math.max(x, Math.round(srcW * scale));
+    const scaledH = Math.max(y, Math.round(srcH * scale));
+    const left = Math.round((scaledW - x) / 2);
+    const top = Math.min(Math.round((scaledH - y) / 2), Math.round(0.15 * scaledH));
+    const pipeline = sharp(sourcePath)
+      .resize(scaledW, scaledH)
+      .extract({ left, top, width: x, height: y });
     if (format === 'jpeg') {
       await pipeline.jpeg({ quality: 80 }).toFile(cachedPath);
     } else {
