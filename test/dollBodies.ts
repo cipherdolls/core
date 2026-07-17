@@ -270,6 +270,39 @@ export function describeDollBodies() {
       expect(body.data[0]).toHaveProperty('id', virtualBodyId);
     });
 
+    // ─── Picture gallery (doll bodies keep many pictures) ──────
+
+    const uploadBodyPicture = async (jwt: string, bodyId: string) => {
+      // Minimal valid 1x1 PNG
+      const png = Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        'base64',
+      );
+      const formData = new FormData();
+      formData.append('file', new File([png], 'gen.png', { type: 'image/png' }));
+      formData.append('dollBodyId', bodyId);
+      const res = await fetch(`${process.env.BASE_URL ?? 'http://localhost:4000'}/pictures`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${jwt}` },
+        body: formData,
+      });
+      return { status: res.status, body: await res.json() };
+    };
+
+    it('uploads accumulate as a gallery on a doll body', async () => {
+      const first = await uploadBodyPicture(auth.alice.jwt, virtualBodyId);
+      expect(first.status).toBe(200);
+      const second = await uploadBodyPicture(auth.alice.jwt, virtualBodyId);
+      expect(second.status).toBe(200);
+      expect(second.body.id).not.toBe(first.body.id);
+
+      const { status, body } = await api('GET', `/doll-bodies/${virtualBodyId}`, auth.alice.jwt);
+      expect(status).toBe(200);
+      expect(body.pictures.length).toBe(2);
+      // Newest first — the latest generation is the cover.
+      expect(body.pictures[0].id).toBe(second.body.id);
+    });
+
     it('bob can NOT delete alice\'s virtual body (403)', async () => {
       const { status } = await api('DELETE', `/doll-bodies/${virtualBodyId}`, auth.bob.jwt);
       expect(status).toBe(403);

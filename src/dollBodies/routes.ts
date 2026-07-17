@@ -21,7 +21,7 @@ export const dollBodiesRoutes = new Elysia({ prefix: '/doll-bodies' })
         where,
         skip,
         take,
-        include: { avatar: { include: { picture: true } }, picture: true, _count: { select: { dolls: true } } },
+        include: { avatar: { include: { picture: true } }, pictures: { orderBy: { createdAt: 'desc' } }, _count: { select: { dolls: true } } },
         orderBy: { createdAt: 'desc' },
       }),
       prisma.dollBody.count({ where }),
@@ -33,7 +33,7 @@ export const dollBodiesRoutes = new Elysia({ prefix: '/doll-bodies' })
   .get('/:id', async ({ params, set }) => {
     const item = await prisma.dollBody.findUnique({
       where: { id: params.id },
-      include: { avatar: { include: { picture: true } }, dolls: true, firmwares: true, picture: true },
+      include: { avatar: { include: { picture: true } }, dolls: true, firmwares: true, pictures: { orderBy: { createdAt: 'desc' } } },
     });
     if (!item) { set.status = 404; return { error: 'Not found' }; }
     return item;

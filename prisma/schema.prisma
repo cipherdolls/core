@@ -71,8 +71,10 @@ model Picture {
 
   doll          Doll?        @relation(fields: [dollId], references: [id], onDelete: Cascade)
   dollId        String?      @unique
+  // Doll bodies keep a gallery (1:n) — each TTI generation adds a picture. All other
+  // entities stay one-to-one (upload replaces).
   dollBody      DollBody?    @relation(fields: [dollBodyId], references: [id], onDelete: Cascade)
-  dollBodyId    String?      @unique
+  dollBodyId    String?
   avatar        Avatar?      @relation(fields: [avatarId], references: [id], onDelete: Cascade)
   avatarId      String?      @unique
   scenario      Scenario?    @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
@@ -130,7 +132,7 @@ model DollBody {
   // A virtual body exists only to carry appearance for image generation — no physical
   // product. When a real doll body is connected it takes precedence over the virtual one.
   virtual     Boolean    @default(false)
-  picture     Picture?
+  pictures    Picture[]
   productUrl  String?
   published   Boolean    @default(false)
   avatar      Avatar     @relation(fields: [avatarId], references: [id])

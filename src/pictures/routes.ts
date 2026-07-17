@@ -47,7 +47,8 @@ export const picturesRoutes = new Elysia({ prefix: '/pictures' })
     const entityKey = entityKeyMap[params.entityType];
     if (!entityKey) return new Response(JSON.stringify({ error: 'Invalid entity type' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
 
-    const item = await prisma.picture.findFirst({ where: { [entityKey]: params.entityId } });
+    // Newest first — for doll bodies (gallery) the latest picture is the cover.
+    const item = await prisma.picture.findFirst({ where: { [entityKey]: params.entityId }, orderBy: { createdAt: 'desc' } });
     if (!item) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
 
     return servePicture(item.id, x, y, 'webp');
@@ -72,7 +73,7 @@ export const picturesRoutes = new Elysia({ prefix: '/pictures' })
     const entityKey = entityKeyMap[params.entityType];
     if (!entityKey) return new Response(JSON.stringify({ error: 'Invalid entity type' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
 
-    const item = await prisma.picture.findFirst({ where: { [entityKey]: params.entityId } });
+    const item = await prisma.picture.findFirst({ where: { [entityKey]: params.entityId }, orderBy: { createdAt: 'desc' } });
     if (!item) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
 
     return servePicture(item.id, x, y, 'jpeg');
@@ -99,10 +100,13 @@ export const picturesRoutes = new Elysia({ prefix: '/pictures' })
     const entityKey = provided[0];
     const entityId = (body as any)[entityKey];
 
-    // Delete existing picture for this entity (one-to-one)
-    const existing = await prisma.picture.findFirst({ where: { [entityKey]: entityId } });
-    if (existing) {
-      await model.picture.delete({ where: { id: existing.id } });
+    // Delete existing picture for this entity (one-to-one). Doll bodies are the
+    // exception: they keep a gallery, so uploads append instead of replacing.
+    if (entityKey !== 'dollBodyId') {
+      const existing = await prisma.picture.findFirst({ where: { [entityKey]: entityId } });
+      if (existing) {
+        await model.picture.delete({ where: { id: existing.id } });
+      }
     }
 
     const fileId = await savePicture(body.file);
