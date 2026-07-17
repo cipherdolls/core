@@ -4,6 +4,23 @@ import { prisma, model } from '../db';
 import { jwtGuard } from '../auth/jwt';
 import { savePicture, servePicture } from './pictures';
 
+/**
+ * Resolve the picture to serve for an entity. Avatars prefer their virtual
+ * doll body's newest picture (the body carries the character's look; the
+ * gallery cover is the face shown everywhere) and fall back to the avatar's
+ * own uploaded picture. Everything else serves its own picture, newest first.
+ */
+async function findEntityPicture(entityKey: string, entityId: string) {
+  if (entityKey === 'avatarId') {
+    const bodyCover = await prisma.picture.findFirst({
+      where: { dollBody: { avatarId: entityId, virtual: true } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (bodyCover) return bodyCover;
+  }
+  return prisma.picture.findFirst({ where: { [entityKey]: entityId }, orderBy: { createdAt: 'desc' } });
+}
+
 export const picturesRoutes = new Elysia({ prefix: '/pictures' })
 
   /* ── GET /pictures/:id/picture.webp ──────────────────────────── */
@@ -47,8 +64,7 @@ export const picturesRoutes = new Elysia({ prefix: '/pictures' })
     const entityKey = entityKeyMap[params.entityType];
     if (!entityKey) return new Response(JSON.stringify({ error: 'Invalid entity type' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
 
-    // Newest first — for doll bodies (gallery) the latest picture is the cover.
-    const item = await prisma.picture.findFirst({ where: { [entityKey]: params.entityId }, orderBy: { createdAt: 'desc' } });
+    const item = await findEntityPicture(entityKey, params.entityId);
     if (!item) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
 
     return servePicture(item.id, x, y, 'webp');
@@ -73,7 +89,7 @@ export const picturesRoutes = new Elysia({ prefix: '/pictures' })
     const entityKey = entityKeyMap[params.entityType];
     if (!entityKey) return new Response(JSON.stringify({ error: 'Invalid entity type' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
 
-    const item = await prisma.picture.findFirst({ where: { [entityKey]: params.entityId }, orderBy: { createdAt: 'desc' } });
+    const item = await findEntityPicture(entityKey, params.entityId);
     if (!item) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
 
     return servePicture(item.id, x, y, 'jpeg');

@@ -307,6 +307,31 @@ export function describeDollBodies() {
       expect(body.pictures[0].id).toBe(second.body.id);
     });
 
+    it('the avatar picture route serves the virtual body cover', async () => {
+      // Hana has no picture of her own — the body carries the character's look.
+      const res = await fetch(
+        `${process.env.BASE_URL ?? 'http://localhost:4000'}/pictures/by/avatars/${hanaAvatarId}/picture.webp?x=64&y=64`,
+      );
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toBe('image/webp');
+    });
+
+    it('bodies of private avatars are hidden from other users', async () => {
+      // Bob sees Hana's bodies while she is published...
+      const before = await api('GET', '/doll-bodies', auth.bob.jwt);
+      expect(before.body.data.length).toBeGreaterThanOrEqual(1);
+
+      // ...but not when she goes private. The owner still sees them.
+      await api('PATCH', `/avatars/${hanaAvatarId}`, auth.alice.jwt, { published: false });
+      const bob = await api('GET', '/doll-bodies', auth.bob.jwt);
+      expect(bob.status).toBe(200);
+      expect(bob.body.data.length).toBe(0);
+      const alice = await api('GET', '/doll-bodies', auth.alice.jwt);
+      expect(alice.body.data.length).toBeGreaterThanOrEqual(1);
+
+      await api('PATCH', `/avatars/${hanaAvatarId}`, auth.alice.jwt, { published: true });
+    });
+
     // ─── TTI jobs (image generation for a doll body) ───────────
 
     it('alice creates a tti job for her virtual body', async () => {

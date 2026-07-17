@@ -9,11 +9,15 @@ export const dollBodiesRoutes = new Elysia({ prefix: '/doll-bodies' })
   .use(jwtGuard)
 
   /* ── GET /doll-bodies ──────────────────────────────────────────── */
-  .get('/', async ({ query }) => {
+  .get('/', async ({ user, query }) => {
     const { pageNum, take, skip } = parsePagination(query.page, query.limit);
     const where = {
+      // Bodies are the public character cards: show bodies of published avatars
+      // plus the caller's own; admins see everything.
+      ...(user.role === 'ADMIN' ? {} : { OR: [{ userId: user.userId }, { avatar: { published: true } }] }),
       ...(query.avatarId ? { avatarId: query.avatarId } : {}),
       ...(query.virtual !== undefined ? { virtual: query.virtual === 'true' } : {}),
+      ...(query.mine === 'true' ? { userId: user.userId } : {}),
     };
 
     const [items, total] = await prisma.$transaction([
