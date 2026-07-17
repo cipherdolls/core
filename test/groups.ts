@@ -217,6 +217,37 @@ export function describeGroups() {
       expect(body.data.length).toBe(0);
     });
 
+    // ─── TTI: prompt-driven cover generation ──────────────────────
+
+    it('alice creates a tti job for her group cover', async () => {
+      const { status, body } = await api('POST', '/tti-jobs', auth.alice.jwt, {
+        groupId: teachersGroupId,
+        prompt: 'warm classroom scene with books and sunlight',
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('groupId', teachersGroupId);
+      expect(body.avatarId).toBeNull();
+      expect(body.prompt).toContain('warm classroom scene');
+    });
+
+    it('group tti job without a prompt is rejected (400)', async () => {
+      const { status } = await api('POST', '/tti-jobs', auth.alice.jwt, { groupId: teachersGroupId });
+      expect(status).toBe(400);
+    });
+
+    it('bob can NOT generate a cover for alice\'s group (403)', async () => {
+      const { status } = await api('POST', '/tti-jobs', auth.bob.jwt, {
+        groupId: teachersGroupId,
+        prompt: 'hacked cover',
+      });
+      expect(status).toBe(403);
+    });
+
+    it('tti job with neither avatarId nor groupId is rejected (400)', async () => {
+      const { status } = await api('POST', '/tti-jobs', auth.alice.jwt, { prompt: 'aimless' });
+      expect(status).toBe(400);
+    });
+
     // ─── DELETE: owner or admin ───────────────────────────────────
 
     it('bob cannot delete alice group', async () => {

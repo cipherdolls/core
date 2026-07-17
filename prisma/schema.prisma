@@ -212,6 +212,7 @@ model Group {
   userId    String
   avatars   Avatar[]
   scenarios Scenario[]
+  ttiJobs   TtiJob[]
 }
 
 model FillerWord {
@@ -448,10 +449,13 @@ model TtiJob {
   usdCost     Decimal  @default(0) @db.Decimal(19, 9)
   timeTakenMs Int?
   error       String?
-  // The generated picture (attached to the avatar's gallery).
+  // The generated picture (avatar: appended to the gallery; group: replaces
+  // the cover). Exactly one of avatarId/groupId is set.
   pictureId   String?
-  avatar      Avatar   @relation(fields: [avatarId], references: [id], onDelete: Cascade)
-  avatarId    String
+  avatar      Avatar?  @relation(fields: [avatarId], references: [id], onDelete: Cascade)
+  avatarId    String?
+  group       Group?   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId     String?
   // Which style produced this image (null = env-default template).
   ttiStyle    TtiStyle? @relation(fields: [ttiStyleId], references: [id], onDelete: SetNull)
   ttiStyleId  String?

@@ -1,7 +1,7 @@
 import type { Job } from 'bullmq';
 import { Prisma, type TtiJob } from '@prisma/client';
 import { BaseProcessor } from '../queue/processor';
-import { model } from '../db';
+import { prisma, model } from '../db';
 import { generateImage } from '../tti/comfyui';
 import { savePicture } from '../pictures/pictures';
 
@@ -25,18 +25,25 @@ class TtiJobsProcessor extends BaseProcessor<TtiJob> {
         height: ttiJob.height,
       });
 
-      // Into the avatar's gallery (pictures accumulate, newest is the face).
       const file = new File([new Uint8Array(png)], 'generated.png', { type: 'image/png' });
       const fileId = await savePicture(file);
-      const picture = await model.picture.create({
-        data: { id: fileId, avatarId: ttiJob.avatarId },
-      });
+
+      let picture;
+      if (ttiJob.groupId) {
+        // Group cover is one-to-one — the new image replaces the old one.
+        const existing = await prisma.picture.findFirst({ where: { groupId: ttiJob.groupId } });
+        if (existing) await model.picture.delete({ where: { id: existing.id } });
+        picture = await model.picture.create({ data: { id: fileId, groupId: ttiJob.groupId } });
+      } else {
+        // Into the avatar's gallery (pictures accumulate, newest is the face).
+        picture = await model.picture.create({ data: { id: fileId, avatarId: ttiJob.avatarId } });
+      }
 
       await model.ttiJob.update({
         where: { id: ttiJob.id },
         data: { pictureId: picture.id, timeTakenMs: Date.now() - startTime },
       }, ttiJob);
-      console.log(`[ttiJob] Generated picture ${picture.id} for avatar ${ttiJob.avatarId} in ${Date.now() - startTime}ms`);
+      console.log(`[ttiJob] Generated picture ${picture.id} for ${ttiJob.groupId ? `group ${ttiJob.groupId}` : `avatar ${ttiJob.avatarId}`} in ${Date.now() - startTime}ms`);
     } catch (error: any) {
       console.error(`[ttiJob] Generation failed for ${ttiJob.id}:`, error.message);
       await model.ttiJob.update({
