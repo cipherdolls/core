@@ -45,9 +45,9 @@ export const dollBodiesRoutes = new Elysia({ prefix: '/doll-bodies' })
     async ({ user, body, set }) => {
       // Virtual bodies (appearance carrier for TTI) can be created by the avatar's
       // owner; physical product bodies stay admin-only.
+      const avatar = await prisma.avatar.findUnique({ where: { id: body.avatarId } });
+      if (!avatar) { set.status = 404; return { error: 'Avatar not found' }; }
       if (body.virtual) {
-        const avatar = await prisma.avatar.findUnique({ where: { id: body.avatarId } });
-        if (!avatar) { set.status = 404; return { error: 'Avatar not found' }; }
         if (avatar.userId !== user.userId && user.role !== 'ADMIN') { set.status = 403; return { error: 'Not authorized' }; }
       } else {
         requireAdmin(user, set);
@@ -57,6 +57,9 @@ export const dollBodiesRoutes = new Elysia({ prefix: '/doll-bodies' })
           name: body.name,
           description: body.description,
           avatar: { connect: { id: body.avatarId } },
+          // The owner is always the avatar's creator — even when an admin
+          // creates the body — so creators manage their avatars' bodies.
+          user: { connect: { id: avatar.userId } },
           ...(body.appearance !== undefined ? { appearance: body.appearance } : {}),
           ...(body.virtual !== undefined ? { virtual: body.virtual } : {}),
           ...(body.productUrl !== undefined ? { productUrl: body.productUrl } : {}),
@@ -81,11 +84,11 @@ export const dollBodiesRoutes = new Elysia({ prefix: '/doll-bodies' })
   .patch(
     '/:id',
     async ({ user, params, body, set }) => {
-      const item = await prisma.dollBody.findUnique({ where: { id: params.id }, include: { avatar: true } });
+      const item = await prisma.dollBody.findUnique({ where: { id: params.id } });
       if (!item) { set.status = 404; return { error: 'Not found' }; }
-      // Owners manage their avatars' virtual bodies; physical bodies stay admin-only.
+      // Owners manage their virtual bodies; physical bodies stay admin-only.
       if (item.virtual) {
-        if (item.avatar.userId !== user.userId && user.role !== 'ADMIN') { set.status = 403; return { error: 'Not authorized' }; }
+        if (item.userId !== user.userId && user.role !== 'ADMIN') { set.status = 403; return { error: 'Not authorized' }; }
       } else {
         requireAdmin(user, set);
       }
@@ -115,10 +118,10 @@ export const dollBodiesRoutes = new Elysia({ prefix: '/doll-bodies' })
 
   /* ── DELETE /doll-bodies/:id ───────────────────────────────────── */
   .delete('/:id', async ({ user, params, set }) => {
-    const item = await prisma.dollBody.findUnique({ where: { id: params.id }, include: { avatar: true } });
+    const item = await prisma.dollBody.findUnique({ where: { id: params.id } });
     if (!item) { set.status = 404; return { error: 'Not found' }; }
     if (item.virtual) {
-      if (item.avatar.userId !== user.userId && user.role !== 'ADMIN') { set.status = 403; return { error: 'Not authorized' }; }
+      if (item.userId !== user.userId && user.role !== 'ADMIN') { set.status = 403; return { error: 'Not authorized' }; }
     } else {
       requireAdmin(user, set);
     }

@@ -21,6 +21,7 @@ import { chatsRoutes } from './chats/routes';
 import { messagesRoutes } from './messages/routes';
 import { dollsRoutes } from './dolls/routes';
 import { dollBodiesRoutes } from './dollBodies/routes';
+import { ttiJobsRoutes } from './ttiJobs/routes';
 import { transactionsRoutes } from './transactions/routes';
 import { sponsorshipsRoutes } from './sponsorships/routes';
 import { tokenPermitsRoutes } from './tokenPermits/routes';
@@ -71,6 +72,7 @@ const app = new Elysia({ normalize: true })
   .use(messagesRoutes)
   .use(dollsRoutes)
   .use(dollBodiesRoutes)
+  .use(ttiJobsRoutes)
   .use(transactionsRoutes)
   .use(sponsorshipsRoutes)
   .use(tokenPermitsRoutes)

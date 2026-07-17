@@ -7,6 +7,7 @@ export function describeDollBodies() {
   describe('Doll Bodies', () => {
 
     let hanaAvatarId: string;
+    let hanaOwnerId: string;
 
     // ─── Setup: fetch avatar ───────────────────────────────────
 
@@ -15,6 +16,7 @@ export function describeDollBodies() {
       const hana = body.data.find((a: any) => a.name === 'Hana');
       expect(hana).toBeDefined();
       hanaAvatarId = hana.id;
+      hanaOwnerId = hana.userId;
     });
 
     // ─── Empty state ───────────────────────────────────────────
@@ -50,6 +52,8 @@ export function describeDollBodies() {
       expect(body).toHaveProperty('name', 'SenseCAP Watcher');
       expect(body).toHaveProperty('description', 'ESP32-S3 AI sensor with camera, mic, speaker');
       expect(body).toHaveProperty('avatarId', hanaAvatarId);
+      // Owner is the avatar's creator (alice), not the admin who created it.
+      expect(body).toHaveProperty('userId', hanaOwnerId);
       dollBodyId = body.id;
     });
 
@@ -135,13 +139,13 @@ export function describeDollBodies() {
 
     // ─── Non-existent resources ────────────────────────────────
 
-    it('POST /doll-bodies with non-existent avatarId returns 500', async () => {
+    it('POST /doll-bodies with non-existent avatarId returns 404', async () => {
       const { status } = await api('POST', '/doll-bodies', auth.admin.jwt, {
         name: 'test',
         description: 'test',
         avatarId: '00000000-0000-0000-0000-000000000000',
       });
-      expect(status).toBe(500);
+      expect(status).toBe(404);
     });
 
     it('GET /doll-bodies/:nonExistentId returns 404', async () => {
@@ -301,6 +305,97 @@ export function describeDollBodies() {
       expect(body.pictures.length).toBe(2);
       // Newest first — the latest generation is the cover.
       expect(body.pictures[0].id).toBe(second.body.id);
+    });
+
+    // ─── TTI jobs (image generation for a doll body) ───────────
+
+    it('alice creates a tti job for her virtual body', async () => {
+      const { status, body } = await api('POST', '/tti-jobs', auth.alice.jwt, {
+        dollBodyId: virtualBodyId,
+        prompt: 'sitting in a sunlit cafe',
+        seed: 42,
+      });
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('id');
+      // Final prompt combines the body appearance with the extra prompt.
+      expect(body.prompt).toContain('black hair');
+      expect(body.prompt).toContain('sunlit cafe');
+      expect(body).toHaveProperty('seed', 42);
+      expect(body).toHaveProperty('dollBodyId', virtualBodyId);
+    });
+
+    it('bob can NOT create a tti job for alice\'s body (403)', async () => {
+      const { status } = await api('POST', '/tti-jobs', auth.bob.jwt, { dollBodyId: virtualBodyId });
+      expect(status).toBe(403);
+    });
+
+    it('tti job for non-existent body returns 404', async () => {
+      const { status } = await api('POST', '/tti-jobs', auth.alice.jwt, {
+        dollBodyId: '00000000-0000-0000-0000-000000000000',
+      });
+      expect(status).toBe(404);
+    });
+
+    it('tti job on a body without appearance requires a prompt (400)', async () => {
+      // The physical SenseCAP body has no appearance set.
+      const { status } = await api('POST', '/tti-jobs', auth.alice.jwt, { dollBodyId });
+      expect(status).toBe(400);
+    });
+
+    it('alice lists her tti jobs, bob sees none', async () => {
+      const alice = await api('GET', `/tti-jobs?dollBodyId=${virtualBodyId}`, auth.alice.jwt);
+      expect(alice.status).toBe(200);
+      // At least the manually created job (appearance updates may auto-add more).
+      expect(alice.body.data.length).toBeGreaterThanOrEqual(1);
+      expect(alice.body.data.some((j: any) => j.prompt.includes('sunlit cafe'))).toBe(true);
+      const bob = await api('GET', '/tti-jobs', auth.bob.jwt);
+      expect(bob.status).toBe(200);
+      expect(bob.body.data.length).toBe(0);
+    });
+
+    it('updating the appearance auto-creates a tti job (regenerates pictures)', async () => {
+      const marker = 'vivid emerald streaks in her hair';
+      const { status } = await api('PATCH', `/doll-bodies/${virtualBodyId}`, auth.alice.jwt, {
+        appearance: `young woman with long black hair, ${marker}`,
+      });
+      expect(status).toBe(200);
+
+      // The dollBody processor reacts to the appearance change and enqueues a
+      // TTI job — poll until it shows up.
+      let autoJob: any = null;
+      const deadline = Date.now() + 15000;
+      while (Date.now() < deadline && !autoJob) {
+        const { body } = await api('GET', `/tti-jobs?dollBodyId=${virtualBodyId}`, auth.alice.jwt);
+        autoJob = (body.data ?? []).find((j: any) => j.prompt.includes(marker));
+        if (!autoJob) await new Promise((r) => setTimeout(r, 1000));
+      }
+      expect(autoJob).toBeTruthy();
+      expect(autoJob.userId).toBeDefined();
+    });
+
+    it('creating a body with an appearance auto-creates its first tti job', async () => {
+      const marker = 'silver bob haircut and amber eyes';
+      const { status, body } = await api('POST', '/doll-bodies', auth.alice.jwt, {
+        name: 'Hana alternate body',
+        description: 'Second virtual body',
+        avatarId: hanaAvatarId,
+        virtual: true,
+        appearance: `petite woman with a ${marker}`,
+      });
+      expect(status).toBe(200);
+
+      let autoJob: any = null;
+      const deadline = Date.now() + 15000;
+      while (Date.now() < deadline && !autoJob) {
+        const { body: jobs } = await api('GET', `/tti-jobs?dollBodyId=${body.id}`, auth.alice.jwt);
+        autoJob = (jobs.data ?? []).find((j: any) => j.prompt.includes(marker));
+        if (!autoJob) await new Promise((r) => setTimeout(r, 1000));
+      }
+      expect(autoJob).toBeTruthy();
+
+      // Cleanup — jobs cascade with the body.
+      const del = await api('DELETE', `/doll-bodies/${body.id}`, auth.alice.jwt);
+      expect(del.status).toBe(200);
     });
 
     it('bob can NOT delete alice\'s virtual body (403)', async () => {

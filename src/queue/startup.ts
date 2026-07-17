@@ -18,6 +18,7 @@ import {
   transactionsProcessor,
   chatCompletionJobsProcessor,
   ttsJobsProcessor,
+  ttiJobsProcessor,
   embeddingJobsProcessor,
   sponsorshipsProcessor,
   tokenPermitsProcessor,
@@ -49,6 +50,7 @@ export function startWorkers() {
   registerWorker('transaction', (job) => transactionsProcessor.process(job));
   registerWorker('chatCompletionJob', (job) => chatCompletionJobsProcessor.process(job));
   registerWorker('ttsJob', (job) => ttsJobsProcessor.process(job));
+  registerWorker('ttiJob', (job) => ttiJobsProcessor.process(job));
   registerWorker('embeddingJob', (job) => embeddingJobsProcessor.process(job));
   registerWorker('sponsorship', (job) => sponsorshipsProcessor.process(job));
   registerWorker('tokenPermit', (job) => tokenPermitsProcessor.process(job));

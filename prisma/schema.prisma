@@ -39,6 +39,8 @@ model User {
   sponsorships Sponsorship[]
   apiKeys      ApiKey[]
   groups       Group[]
+  ttiJobs      TtiJob[]
+  dollBodies   DollBody[]
 
   invitedBy   User?   @relation("UserInvites", fields: [invitedById], references: [id], onDelete: SetNull)
   invitedById String?
@@ -137,8 +139,13 @@ model DollBody {
   published   Boolean    @default(false)
   avatar      Avatar     @relation(fields: [avatarId], references: [id])
   avatarId    String
+  // Owner — always the avatar's creator (set server-side, even when an admin
+  // creates the body), so creators manage their avatars' bodies.
+  user        User       @relation(fields: [userId], references: [id])
+  userId      String
   dolls       Doll[]
   firmwares   Firmware[]
+  ttiJobs     TtiJob[]
 }
 
 model Firmware {
@@ -404,6 +411,26 @@ model TtsJob {
   messageId   String      @unique
   ttsVoice    TtsVoice?   @relation(fields: [ttsVoiceId], references: [id], onDelete: Cascade)
   ttsVoiceId  String?
+}
+
+model TtiJob {
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  // Final prompt sent to the image model (style template + body appearance + extras).
+  prompt      String
+  seed        Int?
+  width       Int      @default(832)
+  height      Int      @default(1216)
+  usdCost     Decimal  @default(0) @db.Decimal(19, 9)
+  timeTakenMs Int?
+  error       String?
+  // The generated picture (attached to the doll body's gallery).
+  pictureId   String?
+  dollBody    DollBody @relation(fields: [dollBodyId], references: [id], onDelete: Cascade)
+  dollBodyId  String
+  user        User     @relation(fields: [userId], references: [id])
+  userId      String
 }
 
 model SttProvider {
