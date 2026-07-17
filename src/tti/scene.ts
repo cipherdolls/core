@@ -2,10 +2,15 @@ import { prisma, model } from '../db';
 import { buildScenePrompt } from './prompt';
 
 const SCENE_SYSTEM_PROMPT =
-  'You turn a roleplay scenario into a single vivid visual SCENE for an image generator. ' +
-  'Describe ONLY the setting: location, environment, time of day, lighting, weather, mood, and notable objects. ' +
-  'Do NOT include people, characters, names, dialogue, actions, instructions, or placeholders like {user}. ' +
-  'Reply with one concise line of comma-separated visual descriptors. No quotes, no preamble.';
+  'You are an art director creating a UNIQUE establishing shot for a roleplay scenario. ' +
+  "Pick ONE specific, distinctive location that fits the scenario's theme, profession, genre, or era — the more particular the better (name the kind of place, its architecture, region, or period). " +
+  'Then give: the location, time of day, season or weather, lighting, colour palette, and 2-3 concrete distinctive objects.\n' +
+  'Rules:\n' +
+  '- Vary widely: choose different times of day, seasons, weather, and setting TYPES (indoor/outdoor, urban/rural/nature/historical/fantasy/sci-fi). Do NOT default to cafes, bedrooms, or night-time rain.\n' +
+  '- NEVER use these words: cozy, dimly lit, dim, warm glow, soft jazz, scattered papers, rainy, moody, inviting.\n' +
+  '- No people, characters, names, dialogue, or actions — setting only.\n' +
+  '- If no location is given, INVENT a specific evocative one matching the subject; never a generic cafe or living room.\n' +
+  'Reply with ONE line of comma-separated concrete visual descriptors. No quotes, no preamble.';
 
 /**
  * Distill a scenario's systemMessage into a visual scene description using the
@@ -29,9 +34,14 @@ export async function deriveScene(scenarioId: string): Promise<string | null> {
         model: scenario.chatModel.providerModelName,
         messages: [
           { role: 'system', content: SCENE_SYSTEM_PROMPT },
-          { role: 'user', content: `Scenario: ${scenario.name}\n\n${scenario.systemMessage}` },
+          {
+            role: 'user',
+            content: `Scenario: ${scenario.name}\n\n${scenario.systemMessage}` +
+              (scenario.greeting ? `\n\nOpening line: ${scenario.greeting}` : ''),
+          },
         ],
-        temperature: 0.4,
+        // Higher temperature so scenes vary across the catalog.
+        temperature: 0.85,
         max_tokens: 160,
       }),
     });
@@ -40,9 +50,14 @@ export async function deriveScene(scenarioId: string): Promise<string | null> {
       return null;
     }
     const data = (await res.json()) as any;
-    const scene = (data.choices?.[0]?.message?.content ?? '')
-      .trim()
+    // Take the first non-empty line (models sometimes append a list/notes),
+    // strip quotes and any leading "Scene:"/"1." marker.
+    const raw = (data.choices?.[0]?.message?.content ?? '').trim();
+    const firstLine = raw.split('\n').map((l: string) => l.trim()).find(Boolean) ?? '';
+    const scene = firstLine
       .replace(/^["']|["']$/g, '')
+      .replace(/^(scene|setting)\s*:\s*/i, '')
+      .replace(/^\d+[.)]\s*/, '')
       .slice(0, 600);
     return scene || null;
   } catch (e: any) {
