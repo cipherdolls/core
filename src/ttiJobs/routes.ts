@@ -49,22 +49,38 @@ export const ttiJobsRoutes = new Elysia({ prefix: '/tti-jobs' })
       }
 
       if (body.groupId) {
-        // Group cover: prompt-driven (groups have no appearance).
-        const group = await prisma.group.findUnique({ where: { id: body.groupId } });
+        // Group cover. Subject: explicit prompt, or derived from the members'
+        // appearances (a group portrait of up to three of its avatars).
+        const group = await prisma.group.findUnique({
+          where: { id: body.groupId },
+          include: { avatars: { where: { appearance: { not: null } }, take: 3, select: { appearance: true } } },
+        });
         if (!group) { set.status = 404; return { error: 'Group not found' }; }
         if (group.userId !== user.userId && user.role !== 'ADMIN') { set.status = 403; return { error: 'Not authorized' }; }
-        if (!body.prompt) { set.status = 400; return { error: 'Groups have no appearance — a prompt is required' }; }
+
+        let subject = body.prompt;
+        if (!subject) {
+          const appearances = group.avatars.map((a) => a.appearance!).filter(Boolean);
+          if (appearances.length === 0) {
+            set.status = 400;
+            return { error: 'Group has no avatars with an appearance — pass a prompt' };
+          }
+          subject = appearances.length === 1
+            ? appearances[0]
+            : `a group of ${appearances.length} companions together: ` + appearances.map((a, i) => `(${i + 1}) ${a}`).join('; ');
+        }
 
         const style = await resolveStyle(body.ttiStyleId);
         return model.ttiJob.create({
           data: {
-            prompt: buildPrompt(style.template, body.prompt),
+            prompt: buildPrompt(style.template, subject),
             group: { connect: { id: group.id } },
             user: { connect: { id: user.userId } },
             ...(style.id ? { ttiStyle: { connect: { id: style.id } } } : {}),
             ...(body.seed !== undefined ? { seed: body.seed } : {}),
-            width: body.width ?? style.width,
-            height: body.height ?? style.height,
+            // Covers are wide by default (group cards are landscape).
+            width: body.width ?? 1216,
+            height: body.height ?? 832,
           },
         });
       }

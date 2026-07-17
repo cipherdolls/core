@@ -230,9 +230,27 @@ export function describeGroups() {
       expect(body.prompt).toContain('warm classroom scene');
     });
 
-    it('group tti job without a prompt is rejected (400)', async () => {
+    it('group tti job without a prompt is rejected when no member has an appearance (400)', async () => {
       const { status } = await api('POST', '/tti-jobs', auth.alice.jwt, { groupId: teachersGroupId });
       expect(status).toBe(400);
+    });
+
+    it('group cover prompt derives from the members\' appearances', async () => {
+      // Give a member avatar an appearance, then generate without a prompt.
+      const { body: group } = await api('GET', `/groups/${teachersGroupId}`, auth.alice.jwt);
+      const member = group.avatars[0];
+      expect(member).toBeDefined();
+      const marker = 'silver-grey hair and warm hazel eyes';
+      await api('PATCH', `/avatars/${member.id}`, auth.alice.jwt, {
+        appearance: `distinguished teacher with ${marker}`,
+      });
+
+      const { status, body } = await api('POST', '/tti-jobs', auth.alice.jwt, { groupId: teachersGroupId });
+      expect(status).toBe(200);
+      expect(body.prompt).toContain(marker);
+      // Covers default to landscape.
+      expect(body.width).toBe(1216);
+      expect(body.height).toBe(832);
     });
 
     it('bob can NOT generate a cover for alice\'s group (403)', async () => {
