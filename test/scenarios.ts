@@ -829,9 +829,13 @@ export function describeScenarios() {
       expect(body.avatars[0]).toHaveProperty('id', avatarForScenarioId);
     });
 
-    it('no Scenario events after avatar patch (avatarIds is a relation, not scalar)', async () => {
+    it('no Scenario reprocessing after avatar patch (relation, not scalar) but a picture regenerates', async () => {
       await waitForQueuesEmpty(60000);
-      expect(aliceUserProcessEvents.length).toBe(0);
+      // avatarIds is a relation → no Scenario scalar reprocessing…
+      // avatarIds is a relation → no Scenario scalar reprocessing. (The membership
+      // change still regenerates the picture — covered by the character-in-scene
+      // test — but that runs through the tti queue, not a Scenario event.)
+      expect((groupByResourceName(aliceUserProcessEvents).Scenario || []).length).toBe(0);
       aliceUserProcessEvents = [];
     });
 
@@ -843,9 +847,9 @@ export function describeScenarios() {
       expect(body.avatars).toHaveLength(0);
     });
 
-    it('no Scenario events after avatar removal (avatarIds is a relation, not scalar)', async () => {
+    it('no Scenario reprocessing after avatar removal (relation, not scalar) but a picture regenerates', async () => {
       await waitForQueuesEmpty(60000);
-      expect(aliceUserProcessEvents.length).toBe(0);
+      expect((groupByResourceName(aliceUserProcessEvents).Scenario || []).length).toBe(0);
       aliceUserProcessEvents = [];
     });
 
@@ -858,9 +862,9 @@ export function describeScenarios() {
       expect(body.avatars[0]).toHaveProperty('id', avatarForScenarioId);
     });
 
-    it('no Scenario events after avatar re-add (avatarIds is a relation, not scalar)', async () => {
+    it('no Scenario reprocessing after avatar re-add (relation, not scalar) but a picture regenerates', async () => {
       await waitForQueuesEmpty(60000);
-      expect(aliceUserProcessEvents.length).toBe(0);
+      expect((groupByResourceName(aliceUserProcessEvents).Scenario || []).length).toBe(0);
       aliceUserProcessEvents = [];
     });
 
