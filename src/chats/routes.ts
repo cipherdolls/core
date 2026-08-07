@@ -1,4 +1,4 @@
-import { Body } from '../helpers/schema';
+import { Body, pickFields } from '../helpers/schema';
 import { Elysia, t } from 'elysia';
 import { prisma, model } from '../db';
 import { jwtGuard } from '../auth/jwt';
@@ -117,7 +117,10 @@ export const chatsRoutes = new Elysia({ prefix: '/chats' })
     if (item.userId !== user.userId && user.role !== 'ADMIN') { set.status = 403; return { error: 'Not authorized' }; }
 
     const original = item;
-    const { sttProviderId, scenarioId, avatarId, ...rest } = body;
+    const { sttProviderId, scenarioId, avatarId } = body;
+    // Whitelist writable fields — Body() lets unknown keys through, so a spread
+    // would let the client reassign `userId` and hand the chat to someone else.
+    const rest = pickFields(body, ['tts', 'active', 'action']);
 
     // Validate related resources exist
     if (avatarId) {

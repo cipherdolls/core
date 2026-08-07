@@ -96,7 +96,8 @@ export const groupsRoutes = new Elysia({ prefix: '/groups' })
       return { error: 'Insufficient spendable tokens' };
     }
 
-    const { avatarIds, scenarioIds, ...rest } = body;
+    const { avatarIds, scenarioIds } = body;
+    const rest = pickFields(body, ['name', 'slug', 'title', 'description', 'published']);
 
     const existing = await prisma.group.findUnique({ where: { slug: rest.slug } });
     if (existing) { set.status = 400; return { error: 'Slug already in use' }; }

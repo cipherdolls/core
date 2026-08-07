@@ -4,6 +4,20 @@ import sharp from 'sharp';
 
 const UPLOADS_DIR = './uploads/pictures';
 
+/** Source images are capped at 2000px, so serving anything larger is pointless. */
+const MAX_DIMENSION = 2000;
+
+/**
+ * Clamp a requested output dimension. `parseInt` on junk yields NaN, which would
+ * reach sharp's extract() and throw a 500; an unbounded value would let a single
+ * request ask for a gigapixel resize.
+ */
+export function parseDimension(value: string | undefined, fallback = 100): number {
+  const parsed = parseInt(value ?? '');
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(Math.max(1, parsed), MAX_DIMENSION);
+}
+
 /** Ensure the upload directory exists */
 function ensureDir(dir: string) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
