@@ -2,7 +2,7 @@ import { Body } from '../helpers/schema';
 import { Elysia, t } from 'elysia';
 import { prisma, model } from '../db';
 import { jwtGuard } from '../auth/jwt';
-import { savePicture, servePicture } from './pictures';
+import { savePicture, servePicture, parseDimension } from './pictures';
 
 /**
  * Resolve the picture to serve for an entity — newest first, so gallery
@@ -13,12 +13,38 @@ async function findEntityPicture(entityKey: string, entityId: string) {
   return prisma.picture.findFirst({ where: { [entityKey]: entityId }, orderBy: { createdAt: 'desc' } });
 }
 
+/** Owner of the entity a picture hangs off, or undefined when it has no owner. */
+async function findEntityOwner(entityKey: string, entityId: string): Promise<string | undefined> {
+  const delegates: Record<string, { findUnique: (args: any) => Promise<{ userId: string } | null> }> = {
+    dollId: prisma.doll,
+    dollBodyId: prisma.dollBody,
+    avatarId: prisma.avatar,
+    scenarioId: prisma.scenario,
+    sttProviderId: prisma.sttProvider,
+    aiProviderId: prisma.aiProvider,
+    ttsProviderId: prisma.ttsProvider,
+    groupId: prisma.group,
+  };
+  const delegate = delegates[entityKey];
+  if (!delegate) return undefined;
+  const entity = await delegate.findUnique({ where: { id: entityId } });
+  return entity?.userId;
+}
+
+/** The entity key a picture row is attached to (pictures carry exactly one). */
+function pictureEntityKey(picture: Record<string, any>): { key: string; id: string } | null {
+  for (const key of ['dollId', 'dollBodyId', 'avatarId', 'scenarioId', 'sttProviderId', 'aiProviderId', 'ttsProviderId', 'groupId']) {
+    if (picture[key]) return { key, id: picture[key] };
+  }
+  return null;
+}
+
 export const picturesRoutes = new Elysia({ prefix: '/pictures' })
 
   /* ── GET /pictures/:id/picture.webp ──────────────────────────── */
   .get('/:id/picture.webp', async ({ params, query }) => {
-    const x = parseInt(query.x ?? '100');
-    const y = parseInt(query.y ?? '100');
+    const x = parseDimension(query.x);
+    const y = parseDimension(query.y);
 
     const item = await prisma.picture.findUnique({ where: { id: params.id } });
     if (!item) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
@@ -28,8 +54,8 @@ export const picturesRoutes = new Elysia({ prefix: '/pictures' })
 
   /* ── GET /pictures/:id/picture.jpg ───────────────────────────── */
   .get('/:id/picture.jpg', async ({ params, query }) => {
-    const x = parseInt(query.x ?? '100');
-    const y = parseInt(query.y ?? '100');
+    const x = parseDimension(query.x);
+    const y = parseDimension(query.y);
 
     const item = await prisma.picture.findUnique({ where: { id: params.id } });
     if (!item) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
@@ -39,8 +65,8 @@ export const picturesRoutes = new Elysia({ prefix: '/pictures' })
 
   /* ── GET /pictures/by/:entityType/:entityId/picture.webp ────── */
   .get('/by/:entityType/:entityId/picture.webp', async ({ params, query }) => {
-    const x = parseInt(query.x ?? '100');
-    const y = parseInt(query.y ?? '100');
+    const x = parseDimension(query.x);
+    const y = parseDimension(query.y);
 
     const entityKeyMap: Record<string, string> = {
       'avatars': 'avatarId',
@@ -64,8 +90,8 @@ export const picturesRoutes = new Elysia({ prefix: '/pictures' })
 
   /* ── GET /pictures/by/:entityType/:entityId/picture.jpg ─────── */
   .get('/by/:entityType/:entityId/picture.jpg', async ({ params, query }) => {
-    const x = parseInt(query.x ?? '100');
-    const y = parseInt(query.y ?? '100');
+    const x = parseDimension(query.x);
+    const y = parseDimension(query.y);
 
     const entityKeyMap: Record<string, string> = {
       'avatars': 'avatarId',
@@ -108,6 +134,11 @@ export const picturesRoutes = new Elysia({ prefix: '/pictures' })
     const entityKey = provided[0];
     const entityId = (body as any)[entityKey];
 
+    // Only the entity's owner (or an admin) may attach a picture to it.
+    const ownerId = await findEntityOwner(entityKey, entityId);
+    if (!ownerId) { set.status = 404; return { error: 'Entity not found' }; }
+    if (ownerId !== user.userId && user.role !== 'ADMIN') { set.status = 403; return { error: 'Not authorized' }; }
+
     // Delete existing picture for this entity (one-to-one). Gallery entities are
     // the exception — doll bodies (real photos) and avatars (generated images)
     // accumulate pictures, so uploads append instead of replacing.
@@ -145,5 +176,11 @@ export const picturesRoutes = new Elysia({ prefix: '/pictures' })
   .delete('/:id', async ({ user, params, set }) => {
     const item = await prisma.picture.findUnique({ where: { id: params.id } });
     if (!item) { set.status = 404; return { error: 'Not found' }; }
+
+    // Only the owner of the entity the picture belongs to (or an admin) may delete it.
+    const target = pictureEntityKey(item as any);
+    const ownerId = target ? await findEntityOwner(target.key, target.id) : undefined;
+    if (ownerId !== user.userId && user.role !== 'ADMIN') { set.status = 403; return { error: 'Not authorized' }; }
+
     return model.picture.delete({ where: { id: params.id } });
   });

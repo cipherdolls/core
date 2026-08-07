@@ -12,7 +12,9 @@ export const chatCompletionJobsRoutes = new Elysia({ prefix: '/chat-completion-j
 
   .get('/', async ({ user, query }) => {
     const { pageNum, take, skip } = parsePagination(query.page, query.limit);
-    const where: any = {};
+    // Scope to the caller's own chats — otherwise any authenticated user could
+    // enumerate every chat's completion jobs.
+    const where: any = user.role === 'ADMIN' ? {} : { chat: { userId: user.userId } };
     if (query.chatId) where.chatId = query.chatId;
 
     const [items, total] = await prisma.$transaction([
@@ -22,11 +24,13 @@ export const chatCompletionJobsRoutes = new Elysia({ prefix: '/chat-completion-j
     return { data: items, meta: paginationMeta(total, pageNum, take) };
   })
 
-  .get('/:id', async ({ params, set }) => {
+  .get('/:id', async ({ user, params, set }) => {
     const item = await prisma.chatCompletionJob.findUnique({
       where: { id: params.id },
-      include: jobInclude,
+      include: { ...jobInclude, chat: { select: { userId: true } } },
     });
     if (!item) { set.status = 404; return { error: 'Not found' }; }
-    return item;
+    if (item.chat.userId !== user.userId && user.role !== 'ADMIN') { set.status = 403; return { error: 'Not authorized' }; }
+    const { chat: _chat, ...job } = item;
+    return job;
   });

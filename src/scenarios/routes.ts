@@ -1,4 +1,4 @@
-import { Body } from '../helpers/schema';
+import { Body, pickFields } from '../helpers/schema';
 import { Elysia, t } from 'elysia';
 import { prisma, model } from '../db';
 import { jwtGuard, optionalJwtGuard, verifyToken } from '../auth/jwt';
@@ -99,12 +99,19 @@ export const scenariosRoutes = new Elysia({ prefix: '/scenarios' })
       return { error: 'Insufficient spendable tokens' };
     }
 
-    const { chatModelId, embeddingModelId, reasoningModelId, avatarIds, ...rest } = body;
+    const { chatModelId, embeddingModelId, reasoningModelId, avatarIds } = body;
+    // Whitelist the writable fields — Body() lets unknown keys through, so a
+    // spread would hand the client every Scenario column (published, free, …).
+    const data = pickFields(body, [
+      'name', 'systemMessage', 'type', 'greeting', 'temperature', 'topP',
+      'frequencyPenalty', 'presencePenalty', 'dollarPerMessage', 'nsfw',
+      'userGender', 'avatarGender', 'recommended',
+    ]);
     // Auto-compute free flag based on dollarPerMessage
-    const free = (rest.dollarPerMessage === undefined || rest.dollarPerMessage === 0) ? true : false;
+    const free = (data.dollarPerMessage === undefined || data.dollarPerMessage === 0) ? true : false;
     const item = await model.scenario.create({
       data: {
-        ...rest,
+        ...data,
         free,
         user: { connect: { id: user.userId } },
         chatModel: { connect: { id: chatModelId } },
@@ -144,13 +151,18 @@ export const scenariosRoutes = new Elysia({ prefix: '/scenarios' })
     if (!item) { set.status = 404; return { error: 'Not found' }; }
     if (item.userId !== user.userId && user.role !== 'ADMIN') { set.status = 403; return { error: 'Not authorized' }; }
 
-    let { chatModelId, embeddingModelId, reasoningModelId, avatarIds, ...rest } = body;
+    let { chatModelId, embeddingModelId, reasoningModelId, avatarIds } = body;
+    const data: any = pickFields(body, [
+      'name', 'systemMessage', 'type', 'greeting', 'temperature', 'topP',
+      'frequencyPenalty', 'presencePenalty', 'dollarPerMessage', 'nsfw',
+      'published', 'recommended', 'userGender', 'avatarGender',
+    ]);
     // Auto-compute free flag when dollarPerMessage changes
     if (body.dollarPerMessage !== undefined) {
-      (rest as any).free = body.dollarPerMessage === 0;
+      data.free = body.dollarPerMessage === 0;
     }
     // When switching to ROLEPLAY, disconnect embedding and reasoning models
-    const switchingToRoleplay = rest.type === 'ROLEPLAY' && item.type !== 'ROLEPLAY';
+    const switchingToRoleplay = body.type === 'ROLEPLAY' && item.type !== 'ROLEPLAY';
     if (switchingToRoleplay) {
       if (embeddingModelId === undefined) embeddingModelId = null;
       if (reasoningModelId === undefined) reasoningModelId = null;
@@ -158,7 +170,7 @@ export const scenariosRoutes = new Elysia({ prefix: '/scenarios' })
     const updated = await model.scenario.update({
       where: { id: params.id },
       data: {
-        ...rest,
+        ...data,
         ...(chatModelId ? { chatModel: { connect: { id: chatModelId } } } : {}),
         ...(embeddingModelId ? { embeddingModel: { connect: { id: embeddingModelId } } } : embeddingModelId === null ? { embeddingModel: { disconnect: true } } : {}),
         ...(reasoningModelId ? { reasoningModel: { connect: { id: reasoningModelId } } } : reasoningModelId === null ? { reasoningModel: { disconnect: true } } : {}),

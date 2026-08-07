@@ -1,4 +1,4 @@
-import { Body } from '../helpers/schema';
+import { Body, pickFields } from '../helpers/schema';
 import { Elysia, t } from 'elysia';
 import { prisma, model } from '../db';
 import { jwtGuard, optionalJwtGuard, verifyToken } from '../auth/jwt';
@@ -97,7 +97,10 @@ export const avatarsRoutes = new Elysia({ prefix: '/avatars' })
       return { error: 'Insufficient spendable tokens' };
     }
 
-    const { recommended, ttsVoiceId, scenarioIds, published, ttiStyleId, ...rest } = body;
+    const { recommended, ttsVoiceId, scenarioIds, published, ttiStyleId } = body;
+    // Whitelist writable fields — Body() lets unknown keys through, so a spread
+    // would let the client set `free`, `userId`, … directly.
+    const rest = pickFields(body, ['name', 'shortDesc', 'character', 'appearance', 'introduction', 'language', 'gender']);
 
     // Enforce publication rule: all assigned scenarios must be published
     if (published === true && Array.isArray(scenarioIds) && scenarioIds.length > 0) {
@@ -153,7 +156,8 @@ export const avatarsRoutes = new Elysia({ prefix: '/avatars' })
     // Non-admin cannot set recommended
     if (body.recommended !== undefined && user.role !== 'ADMIN') { set.status = 403; return { error: 'Only admins can set recommended on avatars' }; }
 
-    const { ttsVoiceId, recommended, scenarioIds, published, ttiStyleId, ...rest } = body;
+    const { ttsVoiceId, recommended, scenarioIds, published, ttiStyleId } = body;
+    const rest = pickFields(body, ['name', 'shortDesc', 'character', 'appearance', 'introduction', 'language', 'gender']);
 
     // Determine final scenario IDs for publish validation
     const finalScenarioIds = scenarioIds ?? (item as any).scenarios?.map((s: any) => s.id) ?? [];

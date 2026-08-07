@@ -2,6 +2,7 @@ import { Body } from '../helpers/schema';
 import { Elysia, t } from 'elysia';
 import { prisma, model } from '../db';
 import { jwtGuard } from '../auth/jwt';
+import { parsePagination } from '../helpers/pagination';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
@@ -26,7 +27,7 @@ export const messagesRoutes = new Elysia({ prefix: '/messages' })
       return { data: [], meta: { hasMore: false, prevCursor: null, nextCursor: null, total: 0, limit: 10 } };
     }
 
-    const limit = Math.min(Math.max(1, parseInt(query.limit ?? '10')), 100);
+    const { take: limit } = parsePagination(undefined, query.limit);
     const direction = query.direction ?? 'next';
     const order = query.order === 'asc' ? 'asc' : 'desc';
 

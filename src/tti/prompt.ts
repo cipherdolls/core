@@ -34,9 +34,24 @@ export async function resolveStyle(ttiStyleId?: string | null): Promise<Resolved
   return { id: null, template: DEFAULT_TEMPLATE, width: 832, height: 1216 };
 }
 
+/**
+ * Fill every {placeholder} in one pass, the way chats/systemPrompt.ts does.
+ *
+ * Two reasons it can't be a chain of `template.replace('{x}', value)`:
+ * substituted text is user-authored, so a `{scene}` inside an appearance would
+ * swallow the template's own {scene} slot on the next call; and String.replace
+ * expands `$&`/`$'` in a *string* replacement, letting that same text splice
+ * arbitrary parts of the template into the prompt. A function replacement over
+ * a single regex pass fixes both — and, being global, fills a placeholder that
+ * an admin used more than once in a style template.
+ */
+function format(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{(\w+)\}/g, (match, key) => (key in vars ? vars[key] : match));
+}
+
 export function buildPrompt(template: string, appearance: string, extra?: string): string {
   const subject = extra ? `${appearance}, ${extra}` : appearance;
-  return template.replace('{subject}', subject);
+  return format(template, { subject });
 }
 
 /** Group-portrait subject from the members' appearances. */
@@ -55,7 +70,7 @@ const SCENE_TEMPLATE = process.env.TTI_SCENE_TEMPLATE
   ?? 'cinematic establishing shot of {scene}, wide angle, atmospheric lighting, rich detailed environment, depth of field, no people, no text';
 
 export function buildScenePrompt(scene: string): string {
-  return SCENE_TEMPLATE.replace('{scene}', scene);
+  return format(SCENE_TEMPLATE, { scene });
 }
 
 /**
@@ -66,5 +81,5 @@ const SCENE_CHARACTER_TEMPLATE = process.env.TTI_SCENE_CHARACTER_TEMPLATE
   ?? 'cinematic environmental portrait of {subject}, in {scene}, natural pose, atmospheric lighting, detailed background, depth of field, sharp focus, no text';
 
 export function buildSceneWithCharacter(scene: string, appearance: string): string {
-  return SCENE_CHARACTER_TEMPLATE.replace('{subject}', appearance).replace('{scene}', scene);
+  return format(SCENE_CHARACTER_TEMPLATE, { subject: appearance, scene });
 }

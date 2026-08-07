@@ -24,9 +24,27 @@ export async function withLock<T>(
     await new Promise((r) => setTimeout(r, RETRY_INTERVAL));
   }
 
+  // Keep the lock alive while fn runs. The TTL exists so a crashed holder can't
+  // wedge the queue — but blockchain sends wait for a receipt and routinely
+  // outlive it, and an expired lock lets a second worker in with a stale nonce.
+  // Extend it periodically (only while we still own it) instead of widening the
+  // TTL, so a dead holder is still released after one TTL.
+  const heartbeat = setInterval(() => {
+    redisConnection
+      .eval(
+        `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("expire", KEYS[1], ARGV[2]) else return 0 end`,
+        1,
+        lockKey,
+        lockValue,
+        String(ttlSeconds),
+      )
+      .catch((err) => console.error(`[lock] failed to extend ${lockKey}: ${err.message}`));
+  }, Math.max(1000, Math.floor(ttl / 3)));
+
   try {
     return await fn();
   } finally {
+    clearInterval(heartbeat);
     // Release only if we still own it (compare-and-delete via Lua)
     await redisConnection.eval(
       `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`,

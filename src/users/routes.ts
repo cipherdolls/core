@@ -74,6 +74,17 @@ export const usersRoutes = new Elysia({ prefix: '/users' })
         return { error: 'Not authorized' };
       }
 
+      // Token accounting mirrors on-chain state and is written by the user
+      // processor (RefreshTokenBalance*). Only admins may set it by hand —
+      // otherwise anyone could grant themselves spendable tokens and walk past
+      // every balance gate (scenario/avatar/group creation, chat start).
+      const isAdmin = user.role === 'ADMIN';
+      const tokenFields = ['tokenBalance', 'tokenAllowance', 'tokenSpendable'] as const;
+      if (!isAdmin && tokenFields.some((f) => body[f] !== undefined)) {
+        set.status = 403;
+        return { error: 'Only admins can set token balances' };
+      }
+
       const updated = await model.user.update({
         where: { id: params.id },
         data: {
@@ -82,9 +93,9 @@ export const usersRoutes = new Elysia({ prefix: '/users' })
           ...(body.language !== undefined ? { language: body.language } : {}),
           ...(body.signerAddress !== undefined ? { signerAddress: body.signerAddress } : {}),
           ...(body.action !== undefined ? { action: body.action } : {}),
-          ...(body.tokenBalance !== undefined ? { tokenBalance: body.tokenBalance } : {}),
-          ...(body.tokenAllowance !== undefined ? { tokenAllowance: body.tokenAllowance } : {}),
-          ...(body.tokenSpendable !== undefined ? { tokenSpendable: body.tokenSpendable } : {}),
+          ...(isAdmin && body.tokenBalance !== undefined ? { tokenBalance: body.tokenBalance } : {}),
+          ...(isAdmin && body.tokenAllowance !== undefined ? { tokenAllowance: body.tokenAllowance } : {}),
+          ...(isAdmin && body.tokenSpendable !== undefined ? { tokenSpendable: body.tokenSpendable } : {}),
         },
       }, target);
       const result = await prisma.user.findUnique({ where: { id: params.id }, select: userSelect });
