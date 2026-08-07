@@ -32,13 +32,22 @@ export function describeAudios() {
   describe('audios Controller (e2e)', () => {
     let avatarId: string;
 
-    // ─── Fetch prerequisite IDs ────────────────────────────────
+    // ─── Create prerequisite avatar ────────────────────────────
 
-    it('fetch an avatar ID', async () => {
-      const { status, body } = await api('GET', '/avatars?published=all', auth.admin.jwt);
+    // Own the fixture rather than scavenging one from describeAvatars: that
+    // block deletes every avatar it creates, so the only one that used to
+    // survive into here was leaking out of describeScenarios.
+    it('admin creates an avatar to attach audio to', async () => {
+      const { body: voices } = await api('GET', '/tts-voices?limit=1', auth.admin.jwt);
+      const { status, body } = await api('POST', '/avatars', auth.admin.jwt, {
+        name: 'AudioTestAvatar',
+        shortDesc: 'test',
+        character: 'test',
+        ttsVoiceId: voices.data[0].id,
+      });
       expect(status).toBe(200);
-      expect(body.data.length).toBeGreaterThan(0);
-      avatarId = body.data[0].id;
+      expect(body).toHaveProperty('id');
+      avatarId = body.id;
     });
 
     // ─── AUTH: only authenticated users can upload ─────────────

@@ -179,7 +179,10 @@ export function describeScenarios() {
       // The processor calls the scenario's own chat model to distill a scene,
       // then enqueues a tti job — poll until it appears.
       let job: any = null;
-      const deadline = Date.now() + 40000;
+      // Keep the deadline under bun's 30s per-test timeout. A loop that outlives
+      // its test is not cancelled — it keeps polling and then asserts against a
+      // job some *later* test created, which reports as an unrelated failure.
+      const deadline = Date.now() + 25000;
       while (Date.now() < deadline && !job) {
         const { body } = await api('GET', `/tti-jobs?scenarioId=${smallTalkScenarioId}`, auth.alice.jwt);
         job = (body.data ?? [])[0];
@@ -226,6 +229,13 @@ export function describeScenarios() {
       expect(body.prompt).toContain('environmental portrait');
       expect(body.prompt).toContain(marker);
       expect(body.prompt).toContain('quiet library reading room');
+
+      // Clean up: describeScenarios() runs before describeAvatars(), and the
+      // avatar tests assert exact counts over the documented fixture state
+      // (hana + freya published, joi private). Leaving this published avatar
+      // behind inflates every published/all=true count by one.
+      const { status: deleted } = await api('DELETE', `/avatars/${avatar.id}`, auth.admin.jwt);
+      expect(deleted).toBe(200);
     });
 
     it('bob can NOT generate a picture for alice\'s scenario (403)', async () => {
