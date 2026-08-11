@@ -143,6 +143,44 @@ export const scenariosRoutes = new Elysia({ prefix: '/scenarios' })
     }),
   })
 
+  /* ── POST /scenarios/reconnect-model ─────────────────────────── */
+  // Bulk-reconnect every scenario using fromModelId to toModelId, so the
+  // old model can be deleted afterwards. Admin only.
+  .post('/reconnect-model', async ({ user, body, set }) => {
+    requireAdmin(user, set);
+    const { modelType, fromModelId, toModelId } = body;
+    if (fromModelId === toModelId) { set.status = 400; return { error: 'fromModelId and toModelId must differ' }; }
+
+    const delegates = {
+      chat: { delegate: prisma.chatModel, relation: 'chatModel', field: 'chatModelId' },
+      embedding: { delegate: prisma.embeddingModel, relation: 'embeddingModel', field: 'embeddingModelId' },
+      reasoning: { delegate: prisma.reasoningModel, relation: 'reasoningModel', field: 'reasoningModelId' },
+    } as const;
+    const { delegate, relation, field } = delegates[modelType];
+
+    const [fromModel, toModel] = await Promise.all([
+      (delegate as any).findUnique({ where: { id: fromModelId } }),
+      (delegate as any).findUnique({ where: { id: toModelId } }),
+    ]);
+    if (!fromModel) { set.status = 404; return { error: `${modelType} model ${fromModelId} not found` }; }
+    if (!toModel) { set.status = 404; return { error: `${modelType} model ${toModelId} not found` }; }
+
+    const scenarios = await prisma.scenario.findMany({ where: { [field]: fromModelId } });
+    for (const scenario of scenarios) {
+      await model.scenario.update({
+        where: { id: scenario.id },
+        data: { [relation]: { connect: { id: toModelId } } },
+      }, scenario);
+    }
+    return { count: scenarios.length, scenarioIds: scenarios.map((s) => s.id) };
+  }, {
+    body: Body({
+      modelType: t.Union([t.Literal('chat'), t.Literal('embedding'), t.Literal('reasoning')]),
+      fromModelId: t.String(),
+      toModelId: t.String(),
+    }),
+  })
+
   /* ── PATCH /scenarios/:id ────────────────────────────────────── */
   .patch('/:id', async ({ user, params, body, set }) => {
     // Include avatar ids so the processor can diff membership (m2m is invisible

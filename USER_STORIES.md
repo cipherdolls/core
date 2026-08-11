@@ -142,6 +142,8 @@ Derived from E2E test specs. Each story represents verified behavior tested agai
 - NSFW flag controls content filtering
 - Published scenarios cannot be deleted by non-admin owners
 - Guest (0 tokens) cannot create scenarios (403)
+- Admin can bulk-reconnect all scenarios from one model to another (chat, embedding, or reasoning), so the old model can be deleted
+- Non-admin users cannot bulk-reconnect scenarios (403)
 
 ---
 
